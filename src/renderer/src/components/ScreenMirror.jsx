@@ -41,7 +41,30 @@ export default function ScreenMirror({
   const decoderRef = useRef(null);
   const wsRef = useRef(null);
 
-  // 1. WebSocket & WebCodecs H.264 In-Window Video Stream
+  // 1. Sync Viewport Bounding Rect with Native Scrcpy Docking Engine
+  useEffect(() => {
+    const syncBounds = () => {
+      if (viewportRef.current && window.electronAPI?.updateViewportBounds) {
+        const rect = viewportRef.current.getBoundingClientRect();
+        window.electronAPI.updateViewportBounds({
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    };
+
+    syncBounds();
+    const timer = setInterval(syncBounds, 1000);
+    window.addEventListener('resize', syncBounds);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('resize', syncBounds);
+    };
+  }, [isMirrorRunning, isEditorOpen]);
+
+  // 2. WebSocket & WebCodecs H.264 In-Window Video Stream (for canvas mode)
   useEffect(() => {
     let ws = null;
     let decoder = null;

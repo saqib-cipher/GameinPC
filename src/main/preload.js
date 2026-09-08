@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startMirror: (data) => ipcRenderer.invoke('mirror:start', data),
   stopMirror: () => ipcRenderer.invoke('mirror:stop'),
   getMirrorStatus: () => ipcRenderer.invoke('mirror:get-status'),
+  updateViewportBounds: (bounds) => ipcRenderer.invoke('mirror:update-bounds', bounds),
   onMirrorStatusChanged: (callback) => {
     ipcRenderer.on('mirror:status-changed', (event, isRunning) => callback(isRunning));
   },

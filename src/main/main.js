@@ -52,6 +52,10 @@ function createWindow() {
     });
   }
 
+  const hwndBuffer = mainWindow.getNativeWindowHandle();
+  const parentHwnd = hwndBuffer.readBigInt64LE ? hwndBuffer.readBigInt64LE(0) : hwndBuffer.readInt32LE(0);
+  mirrorService.setParentHwnd(parentHwnd);
+
   mirrorService.onStatusChange = (isRunning) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('mirror:status-changed', isRunning);
@@ -168,6 +172,11 @@ ipcMain.handle('mirror:stop', async () => {
 
 ipcMain.handle('mirror:get-status', async () => {
   return { isRunning: mirrorService.isRunning || streamService.isRunning, serial: mirrorService.currentSerial || streamService.activeDevice?.serial };
+});
+
+ipcMain.handle('mirror:update-bounds', (event, bounds) => {
+  mirrorService.updateViewportBounds(bounds);
+  return true;
 });
 
 // Keymapping & Config Handlers

@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -9,6 +9,9 @@ class MirrorService {
     this.currentSerial = null;
     this.isRunning = false;
     this.onStatusChange = null;
+    this.parentHwnd = null;
+    this.currentBounds = { x: 16, y: 56, width: 960, height: 540 };
+    this.dockScriptPath = path.resolve(__dirname, 'dock_window.ps1');
   }
 
   resolveScrcpyPath() {
@@ -23,6 +26,46 @@ class MirrorService {
     return 'scrcpy';
   }
 
+  setParentHwnd(hwnd) {
+    this.parentHwnd = hwnd;
+  }
+
+  updateViewportBounds(bounds) {
+    this.currentBounds = bounds;
+    if (this.isRunning && this.parentHwnd) {
+      this.dockToParent();
+    }
+  }
+
+  dockToParent() {
+    if (!this.parentHwnd) return;
+
+    const hwndStr = this.parentHwnd.toString();
+    const { x, y, width, height } = this.currentBounds;
+
+    const psArgs = [
+      '-ExecutionPolicy', 'Bypass',
+      '-File', this.dockScriptPath,
+      '-ChildTitle', 'GameinPC - Mirror View',
+      '-ParentHwnd', hwndStr,
+      '-X', Math.round(x).toString(),
+      '-Y', Math.round(y).toString(),
+      '-Width', Math.round(width).toString(),
+      '-Height', Math.round(height).toString(),
+    ];
+
+    execFile('powershell', psArgs, (err, stdout) => {
+      if (err) {
+        console.warn('[MirrorService] Dock error:', err.message);
+      } else {
+        const out = stdout.trim();
+        if (out.includes('DOCKED_SUCCESS')) {
+          console.log('[MirrorService] Native Scrcpy Direct3D 11 window successfully docked into GameinPC!');
+        }
+      }
+    });
+  }
+
   startMirror(serial, settings = {}) {
     if (this.isRunning && this.activeProcess) {
       this.stopMirror();
@@ -31,7 +74,7 @@ class MirrorService {
     this.currentSerial = serial;
     const args = ['--serial', serial];
 
-    // 1. Ultra-low latency video options (120 FPS Direct3D 11)
+    // 1. Ultra-low latency Direct3D 11 rendering (120 FPS, 0 Lag)
     const bitrate = settings.bitrate || 16;
     args.push(`--video-bit-rate=${bitrate}M`);
 
@@ -42,12 +85,17 @@ class MirrorService {
       args.push(`--max-size=${settings.maxSize}`);
     }
 
-    // 2. Zero-latency buffer flags (instant raw frames)
+    // 2. Zero-latency raw video flags
     args.push('--video-buffer=0');
     args.push('--audio-buffer=20');
     args.push('--render-driver=direct3d11');
 
-    // 3. Power & Device flags
+    // 3. Prevent Scrcpy from stealing key focus so our Keymapper handles WASD/Aim/Shoot/Macros
+    // Scrcpy purely renders the 120 FPS video while our Keymapper handles all touch injection!
+    args.push('--keyboard=disabled');
+    args.push('--mouse=disabled');
+
+    // 4. Power & Device flags
     if (settings.stayAwake !== false) {
       args.push('--stay-awake');
     }
@@ -60,10 +108,11 @@ class MirrorService {
       args.push('--no-audio');
     }
 
-    // 4. Window properties
+    // 5. Borderless Child Window Setup
     args.push('--window-title=GameinPC - Mirror View');
+    args.push('--window-borderless');
 
-    console.log(`[MirrorService] Launching native zero-lag Scrcpy: ${this.scrcpyPath} ${args.join(' ')}`);
+    console.log(`[MirrorService] Launching Scrcpy engine: ${this.scrcpyPath} ${args.join(' ')}`);
 
     try {
       const binDir = path.dirname(this.scrcpyPath);
@@ -79,6 +128,11 @@ class MirrorService {
 
       this.isRunning = true;
       if (this.onStatusChange) this.onStatusChange(true);
+
+      // Attempt docking after Scrcpy creates its SDL HWND (retry after 400ms and 1000ms)
+      setTimeout(() => this.dockToParent(), 400);
+      setTimeout(() => this.dockToParent(), 1000);
+      setTimeout(() => this.dockToParent(), 2000);
 
       this.activeProcess.stdout.on('data', (data) => {
         console.log(`[scrcpy]: ${data.toString().trim()}`);
