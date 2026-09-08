@@ -90,11 +90,9 @@ class MirrorService {
     args.push('--audio-buffer=20');
     args.push('--render-driver=direct3d11');
 
-    // 3. Prevent Scrcpy from stealing key focus so our Keymapper handles WASD/Aim/Shoot/Macros
-    // Scrcpy purely renders the 120 FPS video while our Keymapper handles all touch injection!
-    args.push('--keyboard=disabled');
-    args.push('--mouse=disabled');
-
+    // 3. Normal native mouse and touch interactivity
+    // Note: Do NOT disable mouse or keyboard so clicks, swipes, and taps work directly on the mirror window!
+    
     // 4. Power & Device flags
     if (settings.stayAwake !== false) {
       args.push('--stay-awake');
@@ -108,9 +106,8 @@ class MirrorService {
       args.push('--no-audio');
     }
 
-    // 5. Borderless Child Window Setup
+    // 5. Window setup
     args.push('--window-title=GameinPC - Mirror View');
-    args.push('--window-borderless');
 
     console.log(`[MirrorService] Launching Scrcpy engine: ${this.scrcpyPath} ${args.join(' ')}`);
 
@@ -128,11 +125,6 @@ class MirrorService {
 
       this.isRunning = true;
       if (this.onStatusChange) this.onStatusChange(true);
-
-      // Attempt docking after Scrcpy creates its SDL HWND (retry after 400ms and 1000ms)
-      setTimeout(() => this.dockToParent(), 400);
-      setTimeout(() => this.dockToParent(), 1000);
-      setTimeout(() => this.dockToParent(), 2000);
 
       this.activeProcess.stdout.on('data', (data) => {
         console.log(`[scrcpy]: ${data.toString().trim()}`);
@@ -156,7 +148,7 @@ class MirrorService {
         if (this.onStatusChange) this.onStatusChange(false);
       });
 
-      return { success: true, message: 'Ultra-low latency Scrcpy mirror started' };
+      return { success: true, message: 'Native Scrcpy mirror window started' };
     } catch (err) {
       console.error('Failed to launch scrcpy:', err);
       this.isRunning = false;

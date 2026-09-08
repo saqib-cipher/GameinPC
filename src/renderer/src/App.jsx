@@ -248,6 +248,40 @@ export default function App() {
     }
   };
 
+  // Snapshot state for In-Game Screen Keymapping
+  const [snapshotUrl, setSnapshotUrl] = useState(null);
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+
+  const handleCaptureSnapshot = async () => {
+    if (!selectedDevice || !window.electronAPI?.captureScreenshot) return;
+    setIsCapturingSnapshot(true);
+    try {
+      const dataUrl = await window.electronAPI.captureScreenshot(selectedDevice.serial);
+      if (dataUrl) {
+        setSnapshotUrl(dataUrl);
+      }
+    } catch (err) {
+      console.error('Failed to capture snapshot:', err);
+    } finally {
+      setIsCapturingSnapshot(false);
+    }
+  };
+
+  const handleToggleEditor = async () => {
+    const nextState = !isEditorOpen;
+    setIsEditorOpen(nextState);
+    if (nextState && !snapshotUrl && selectedDevice) {
+      handleCaptureSnapshot();
+    }
+  };
+
+  const handleOpenEditor = async () => {
+    setIsEditorOpen(true);
+    if (!snapshotUrl && selectedDevice) {
+      handleCaptureSnapshot();
+    }
+  };
+
   const handleSaveScheme = () => {
     if (window.electronAPI) {
       window.electronAPI.saveSchemes(schemes);
@@ -332,7 +366,7 @@ export default function App() {
         showOverlay={showOverlay}
         onToggleOverlay={() => setShowOverlay(!showOverlay)}
         isEditorOpen={isEditorOpen}
-        onToggleEditor={() => setIsEditorOpen(!isEditorOpen)}
+        onToggleEditor={handleToggleEditor}
         onOpenWirelessModal={() => setIsWirelessModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onToggleFullscreen={handleToggleFullscreen}
@@ -350,7 +384,7 @@ export default function App() {
           deviceDetails={deviceDetails}
           onStartMirror={handleToggleMirror}
           onOpenWirelessModal={() => setIsWirelessModalOpen(true)}
-          onOpenEditor={() => setIsEditorOpen(true)}
+          onOpenEditor={handleOpenEditor}
           onImportCfg={handleImportCfg}
           scheme={activeScheme}
           isEditorOpen={isEditorOpen}
@@ -363,6 +397,11 @@ export default function App() {
           isShootingMode={isShootingMode}
           onToggleShootingMode={setIsShootingMode}
           settings={settings}
+          snapshotUrl={snapshotUrl}
+          isCapturingSnapshot={isCapturingSnapshot}
+          onCaptureSnapshot={handleCaptureSnapshot}
+          onClearSnapshot={() => setSnapshotUrl(null)}
+          onUploadSnapshot={(url) => setSnapshotUrl(url)}
         />
 
         {/* Controls Editor Sidebar (Matching Screenshot) */}
@@ -381,6 +420,11 @@ export default function App() {
           onChangeOpacity={setOpacity}
           scale={scale}
           onChangeScale={setScale}
+          snapshotUrl={snapshotUrl}
+          isCapturingSnapshot={isCapturingSnapshot}
+          onCaptureSnapshot={handleCaptureSnapshot}
+          onClearSnapshot={() => setSnapshotUrl(null)}
+          onUploadSnapshot={(url) => setSnapshotUrl(url)}
         />
       </div>
 

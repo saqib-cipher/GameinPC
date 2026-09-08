@@ -224,6 +224,40 @@ class AdbService {
     }
   }
 
+  async captureScreenshot(serial) {
+    if (!serial && this.currentDevice) serial = this.currentDevice.serial;
+    if (!serial) return null;
+
+    return new Promise((resolve) => {
+      try {
+        const proc = spawn(this.adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], { windowsHide: true });
+        const chunks = [];
+
+        proc.stdout.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0 && chunks.length > 0) {
+            const buffer = Buffer.concat(chunks);
+            const base64 = buffer.toString('base64');
+            resolve(`data:image/png;base64,${base64}`);
+          } else {
+            resolve(null);
+          }
+        });
+
+        proc.on('error', (err) => {
+          console.warn('[AdbService] Screenshot error:', err);
+          resolve(null);
+        });
+      } catch (err) {
+        console.warn('[AdbService] Screenshot spawn error:', err);
+        resolve(null);
+      }
+    });
+  }
+
   // Fallback touch and key injection methods
   async tap(serial, x, y) {
     return this.runAdbCommand(['-s', serial, 'shell', 'input', 'tap', Math.round(x), Math.round(y)]);

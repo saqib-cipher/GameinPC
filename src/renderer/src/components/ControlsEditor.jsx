@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   X, 
   HelpCircle, 
@@ -20,7 +20,11 @@ import {
   Sliders,
   SlidersHorizontal,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Camera,
+  RefreshCw,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const PALETTE_TOOLS = [
@@ -53,10 +57,16 @@ export default function ControlsEditor({
   onChangeOpacity,
   scale,
   onChangeScale,
+  snapshotUrl,
+  isCapturingSnapshot,
+  onCaptureSnapshot,
+  onClearSnapshot,
+  onUploadSnapshot,
 }) {
   const [activeTab, setActiveTab] = useState('palette'); // 'palette' | 'inspector'
   const [isRecordingKey, setIsRecordingKey] = useState(false);
   const [recordingField, setRecordingField] = useState('key'); // 'key' | 'key_alt1' | 'keyStartStop' | 'keySuspend'
+  const fileInputRef = useRef(null);
 
   if (!isOpen) return null;
 
@@ -202,6 +212,61 @@ export default function ControlsEditor({
               value={scale} 
               onChange={(e) => onChangeScale(parseInt(e.target.value, 10))} 
             />
+          </div>
+        </div>
+
+        {/* Screen Snapshot Background Manager (In-Game Screen Trick) */}
+        <div className="editor-section snapshot-manager-box">
+          <div className="section-subtitle">Screen Snapshot (In-Game Layout)</div>
+          
+          <div className="snapshot-btn-row">
+            <button 
+              className={`btn btn-primary btn-sm ${isCapturingSnapshot ? 'btn-loading' : ''}`}
+              onClick={onCaptureSnapshot}
+              disabled={isCapturingSnapshot}
+              title="Take live screenshot of mobile screen to place buttons accurately"
+            >
+              <Camera size={14} className={isCapturingSnapshot ? 'spin-anim' : ''} />
+              <span>{isCapturingSnapshot ? 'Capturing...' : (snapshotUrl ? 'Refresh Snapshot' : 'Take Screen Snapshot')}</span>
+            </button>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => onUploadSnapshot(ev.target.result);
+                  reader.readAsDataURL(file);
+                }
+              }}
+            />
+            <button 
+              className="btn btn-secondary btn-sm" 
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload existing game screenshot from PC"
+            >
+              <Upload size={13} />
+            </button>
+
+            {snapshotUrl && (
+              <button 
+                className="btn btn-secondary btn-sm" 
+                onClick={onClearSnapshot}
+                title="Clear background image"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+          
+          <div className="snapshot-hint-text">
+            {snapshotUrl 
+              ? '✅ Showing real game screen HUD. Drag & place key controls directly on game buttons!' 
+              : '💡 Click "Take Screen Snapshot" to capture your in-game controls as background!'}
           </div>
         </div>
 

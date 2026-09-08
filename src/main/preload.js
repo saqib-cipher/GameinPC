@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendKey: (data) => ipcRenderer.invoke('adb:send-key', data),
   tap: (data) => ipcRenderer.invoke('adb:tap', data),
   swipe: (data) => ipcRenderer.invoke('adb:swipe', data),
+  captureScreenshot: (serial) => ipcRenderer.invoke('adb:capture-screenshot', serial),
 
   // Screen Mirroring
   startMirror: (data) => ipcRenderer.invoke('mirror:start', data),

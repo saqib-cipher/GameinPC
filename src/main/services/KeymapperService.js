@@ -60,15 +60,14 @@ class KeymapperService {
   sendTouchEvent(pointerId, action, xPercent, yPercent) {
     if (this.touchSender) {
       this.touchSender({ pointerId, action, x: xPercent, y: yPercent });
-      return;
     }
 
-    // ADB fallback
-    if (!this.currentDevice) return;
-    
-    // For adb fallback:
-    if (action === 0) { // DOWN/TAP
-      // Dispatched to adb
+    if (this.currentDevice && action === 0) {
+      const width = this.currentDevice.resolution?.width || 1080;
+      const height = this.currentDevice.resolution?.height || 2400;
+      const px = Math.round((xPercent / 100) * width);
+      const py = Math.round((yPercent / 100) * height);
+      adbService.tap(this.currentDevice.serial, px, py).catch(() => {});
     }
   }
 
