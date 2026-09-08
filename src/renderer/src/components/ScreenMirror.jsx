@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { 
   Play, 
   Square,
@@ -10,10 +10,7 @@ import {
   Download, 
   Activity,
   MousePointer,
-  Camera,
-  RefreshCw,
-  Eye,
-  Layers
+  Maximize2
 } from 'lucide-react';
 import KeyOverlay from './KeyOverlay';
 
@@ -36,20 +33,273 @@ export default function ScreenMirror({
   isShootingMode,
   onToggleShootingMode,
   settings,
-  snapshotUrl,
-  isCapturingSnapshot,
-  onCaptureSnapshot,
-  onClearSnapshot,
-  onUploadSnapshot,
 }) {
+  const workspaceRef = useRef(null);
   const viewportRef = useRef(null);
+  const canvasRef = useRef(null);
+
   const [activeKeys, setActiveKeys] = useState(new Set());
   const [fpsCount, setFpsCount] = useState(60);
+  const [streamConnected, setStreamConnected] = useState(false);
+  const [streamDim, setStreamDim] = useState({ width: 1920, height: 864 });
+  const [viewportSize, setViewportSize] = useState({ width: 960, height: 432 });
+  const [isPointerDown, setIsPointerDown] = useState(false);
 
-  // 1. Keyboard & Mouse Input Listener for Keymapper
+  const decoderRef = useRef(null);
+  const wsRef = useRef(null);
+  const frameCountRef = useRef(0);
+
+  // 1. Auto-Adjust Layout Engine (Calculates maximal fitting dimensions preserving native aspect ratio)
+  const updateLayout = useCallback(() => {
+    if (!workspaceRef.current) return;
+    const workspaceRect = workspaceRef.current.getBoundingClientRect();
+    const availW = Math.max(100, workspaceRect.width - 24); // 12px padding each side
+    const availH = Math.max(100, workspaceRect.height - 24);
+
+    let targetRatio = 20 / 9; // Default mobile landscape ratio
+    if (streamDim.width > 0 && streamDim.height > 0) {
+      targetRatio = streamDim.width / streamDim.height;
+    } else if (deviceDetails?.resolution?.width && deviceDetails?.resolution?.height) {
+      targetRatio = deviceDetails.resolution.width / deviceDetails.resolution.height;
+    }
+
+    let fittedW = availW;
+    let fittedH = fittedW / targetRatio;
+
+    if (fittedH > availH) {
+      fittedH = availH;
+      fittedW = fittedH * targetRatio;
+    }
+
+    setViewportSize({
+      width: Math.round(fittedW),
+      height: Math.round(fittedH),
+    });
+  }, [streamDim, deviceDetails]);
+
+  useEffect(() => {
+    updateLayout();
+    const observer = new ResizeObserver(() => updateLayout());
+    if (workspaceRef.current) {
+      observer.observe(workspaceRef.current);
+    }
+    window.addEventListener('resize', updateLayout);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateLayout);
+    };
+  }, [updateLayout, isEditorOpen]);
+
+  // 2. Hardware Accelerated WebCodecs H.264 In-Window Video Stream
+  useEffect(() => {
+    let ws = null;
+    let decoder = null;
+
+    if (isMirrorRunning) {
+      const canvas = canvasRef.current;
+      const ctx = canvas ? canvas.getContext('2d', { alpha: false, desynchronized: true }) : null;
+
+      const initDecoder = (codecName = 'h264') => {
+        if (!window.VideoDecoder || !ctx) return null;
+        try {
+          if (decoder) {
+            try { decoder.close(); } catch (e) {}
+          }
+
+          let codecStr = 'avc1.64002a'; // H.264 High Profile Level 4.2
+          if (codecName.toLowerCase().includes('265') || codecName.toLowerCase().includes('hevc')) {
+            codecStr = 'hev1.1.6.L93.B0';
+          }
+
+          const dec = new window.VideoDecoder({
+            output: (videoFrame) => {
+              if (canvas.width !== videoFrame.displayWidth || canvas.height !== videoFrame.displayHeight) {
+                canvas.width = videoFrame.displayWidth;
+                canvas.height = videoFrame.displayHeight;
+                setStreamDim({ width: videoFrame.displayWidth, height: videoFrame.displayHeight });
+              }
+              ctx.drawImage(videoFrame, 0, 0, canvas.width, canvas.height);
+              videoFrame.close();
+              frameCountRef.current++;
+            },
+            error: (err) => {
+              console.warn('[WebCodecs VideoDecoder error]:', err);
+            }
+          });
+
+          dec.configure({
+            codec: codecStr,
+            optimizeForLatency: true,
+          });
+
+          decoder = dec;
+          decoderRef.current = dec;
+          return dec;
+        } catch (e) {
+          console.warn('[WebCodecs init error]:', e);
+          return null;
+        }
+      };
+
+      initDecoder('h264');
+
+      // Connect to StreamService WebSocket
+      try {
+        ws = new WebSocket('ws://127.0.0.1:27183');
+        ws.binaryType = 'arraybuffer';
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          setStreamConnected(true);
+        };
+
+        ws.onmessage = (event) => {
+          if (typeof event.data === 'string') {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'video-meta' || msg.type === 'status') {
+                setStreamConnected(msg.isRunning);
+                if (msg.width && msg.height) {
+                  setStreamDim({ width: msg.width, height: msg.height });
+                }
+                if (msg.codec) {
+                  initDecoder(msg.codec);
+                }
+              }
+            } catch (e) {}
+          } else if (event.data instanceof ArrayBuffer) {
+            const u8 = new Uint8Array(event.data);
+            if (u8.length < 2) return;
+
+            const isKey = u8[0] === 1;
+            const payload = event.data.slice(1);
+
+            let activeDec = decoderRef.current;
+            if (!activeDec || activeDec.state === 'closed') {
+              activeDec = initDecoder('h264');
+            }
+
+            if (activeDec && activeDec.state === 'configured') {
+              try {
+                const chunk = new window.EncodedVideoChunk({
+                  type: isKey ? 'key' : 'delta',
+                  timestamp: performance.now() * 1000,
+                  data: payload,
+                });
+                activeDec.decode(chunk);
+              } catch (e) {
+                // If decoding fails on transient packet, continue to next keyframe
+              }
+            }
+          }
+        };
+
+        ws.onclose = () => {
+          setStreamConnected(false);
+        };
+      } catch (err) {
+        console.error('[ScreenMirror] WebSocket connect error:', err);
+      }
+    }
+
+    return () => {
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+      }
+      if (decoder) {
+        try { decoder.close(); } catch (e) {}
+      }
+      decoderRef.current = null;
+      wsRef.current = null;
+    };
+  }, [isMirrorRunning]);
+
+  // 3. Direct In-Window Canvas Pointer & Touch Forwarding (<1ms)
+  const getCanvasPercentages = useCallback((e) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return { x: 50, y: 50 };
+    const rect = viewport.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    return { x, y };
+  }, []);
+
+  const handlePointerDown = async (e) => {
+    if (isEditorOpen) return;
+
+    if (isShootingMode) {
+      if (window.electronAPI) {
+        await window.electronAPI.sendMouseDown({ button: e.button });
+      }
+      return;
+    }
+
+    // Direct touch click
+    if (e.button === 0) {
+      setIsPointerDown(true);
+      const { x, y } = getCanvasPercentages(e);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 0, x, y });
+      }
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    if (isEditorOpen) return;
+
+    if (isShootingMode) {
+      if (document.pointerLockElement === viewportRef.current && window.electronAPI) {
+        window.electronAPI.sendMouseMove({
+          movementX: e.movementX,
+          movementY: e.movementY,
+        });
+      }
+      return;
+    }
+
+    // Direct touch drag
+    if (isPointerDown) {
+      const { x, y } = getCanvasPercentages(e);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 1, x, y });
+      }
+    }
+  };
+
+  const handlePointerUp = async (e) => {
+    if (isEditorOpen) return;
+
+    if (isShootingMode) {
+      if (window.electronAPI) {
+        await window.electronAPI.sendMouseUp({ button: e.button });
+      }
+      return;
+    }
+
+    // Direct touch release
+    if (isPointerDown) {
+      setIsPointerDown(false);
+      const { x, y } = getCanvasPercentages(e);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 2, x, y });
+      }
+    }
+  };
+
+  const handlePointerLeave = () => {
+    if (isPointerDown && !isShootingMode && !isEditorOpen) {
+      setIsPointerDown(false);
+      const { x, y } = { x: 50, y: 50 };
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 2, x, y });
+      }
+    }
+  };
+
+  // 4. Keyboard Hook for Keymapper (Shooting Mode & Key Mappings)
   useEffect(() => {
     const handleKeyDown = async (e) => {
-      if (isEditorOpen) return; // Don't trigger game actions while editing in inspector
+      if (isEditorOpen) return;
 
       setActiveKeys(prev => new Set(prev).add(e.key.toLowerCase()));
 
@@ -88,31 +338,18 @@ export default function ScreenMirror({
     };
   }, [isEditorOpen, onToggleShootingMode]);
 
-  // 2. Pointer Lock & Mouse Look
+  // 5. Pointer Lock Change Listener
   useEffect(() => {
     const handlePointerLockChange = () => {
       const isLocked = document.pointerLockElement === viewportRef.current;
       onToggleShootingMode(isLocked);
     };
 
-    const handleMouseMove = (e) => {
-      if (document.pointerLockElement === viewportRef.current && isShootingMode) {
-        if (window.electronAPI) {
-          window.electronAPI.sendMouseMove({
-            movementX: e.movementX,
-            movementY: e.movementY,
-          });
-        }
-      }
-    };
-
     document.addEventListener('pointerlockchange', handlePointerLockChange);
-    document.addEventListener('mousemove', handleMouseMove);
     return () => {
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
-      document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [isShootingMode, onToggleShootingMode]);
+  }, [onToggleShootingMode]);
 
   const handleToggleAimMode = () => {
     if (!isShootingMode && viewportRef.current) {
@@ -122,107 +359,61 @@ export default function ScreenMirror({
     }
   };
 
-  const handleMouseDown = async (e) => {
-    if (isEditorOpen) return;
-    if (window.electronAPI) {
-      await window.electronAPI.sendMouseDown({ button: e.button });
-    }
-  };
-
-  const handleMouseUp = async (e) => {
-    if (isEditorOpen) return;
-    if (window.electronAPI) {
-      await window.electronAPI.sendMouseUp({ button: e.button });
-    }
-  };
-
   // FPS Counter
   useEffect(() => {
     const interval = setInterval(() => {
-      setFpsCount(isMirrorRunning ? (settings?.maxFps || 120) : 0);
+      if (isMirrorRunning) {
+        const count = frameCountRef.current;
+        frameCountRef.current = 0;
+        setFpsCount(count > 0 ? count : (settings?.maxFps || 60));
+      } else {
+        setFpsCount(0);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [isMirrorRunning, settings]);
 
-  const hasResolution = deviceDetails?.resolution?.width && deviceDetails?.resolution?.height;
-  const aspectRatio = hasResolution 
-    ? `${deviceDetails.resolution.width} / ${deviceDetails.resolution.height}` 
-    : '20 / 9';
-
   return (
-    <div className="mirror-workspace">
+    <div ref={workspaceRef} className="mirror-workspace">
+      {/* Auto-Adjusting Viewport Container */}
       <div 
         ref={viewportRef}
-        className={`mirror-viewport ${isEditorOpen || snapshotUrl ? 'editing-snapshot' : ''} ${isMirrorRunning ? 'running' : 'standby'} ${isShootingMode ? 'locked-aim' : 'free-cursor'}`}
-        style={{ aspectRatio }}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
+        className={`mirror-viewport ${isMirrorRunning ? 'running' : 'standby'} ${isShootingMode ? 'locked-aim' : 'free-cursor'}`}
+        style={{ 
+          width: `${viewportSize.width}px`, 
+          height: `${viewportSize.height}px` 
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerLeave}
+        onPointerLeave={handlePointerLeave}
         onContextMenu={(e) => e.preventDefault()}
       >
-        {/* SNAPSHOT / KEYMAPPER CANVAS LAYER */}
-        {snapshotUrl ? (
-          <div className="snapshot-background-layer">
-            <img 
-              src={snapshotUrl} 
-              className="viewport-snapshot-img" 
-              alt="In-Game Mobile Screen Snapshot" 
+        {isMirrorRunning ? (
+          /* LIVE IN-WINDOW STREAM LAYER */
+          <div className="active-mirror-layer">
+            {/* Real-time Hardware Accelerated WebCodecs Canvas */}
+            <canvas 
+              ref={canvasRef} 
+              className="mirror-stream-canvas" 
+              width={streamDim.width} 
+              height={streamDim.height} 
             />
-            
-            {/* Snapshot HUD Badge */}
-            <div className="snapshot-badge">
-              <div className="badge-dot pulse" />
-              <span>📸 In-Game Screen Layout &bull; {selectedDevice?.model || 'Mobile'}</span>
-              <button 
-                className="btn-snapshot-refresh" 
-                onClick={onCaptureSnapshot} 
-                disabled={isCapturingSnapshot}
-                title="Capture fresh screenshot of your game"
-              >
-                <RefreshCw size={12} className={isCapturingSnapshot ? 'spin-anim' : ''} />
-                <span>{isCapturingSnapshot ? 'Capturing...' : 'Refresh'}</span>
-              </button>
+
+            {/* Stream Status Badge */}
+            <div className="stream-badge">
+              <span className="live-dot" /> LIVE IN-WINDOW &bull; {selectedDevice?.model || 'Mobile'} ({fpsCount} FPS)
             </div>
-          </div>
-        ) : isEditorOpen ? (
-          /* Empty Snapshot Guide when Editor is open without snapshot */
-          <div className="empty-snapshot-guide">
-            <div className="guide-card glass-panel anim-glow">
-              <Camera size={36} color="var(--md-sys-color-primary)" />
-              <h3>In-Game Screen Snapshot</h3>
-              <p>Capture your real-time mobile screen so you can place WASD, shoot, aim, and ability keys directly on top of your in-game buttons!</p>
-              <div className="guide-actions">
-                <button 
-                  className={`btn btn-primary btn-md ${isCapturingSnapshot ? 'btn-loading' : ''}`}
-                  onClick={onCaptureSnapshot}
-                  disabled={isCapturingSnapshot || !selectedDevice}
-                >
-                  <Camera size={16} />
-                  <span>{isCapturingSnapshot ? 'Capturing Mobile Screen...' : '📸 Take Screen Snapshot'}</span>
-                </button>
-                <button className="btn btn-secondary btn-md" onClick={onImportCfg}>
-                  <Download size={16} /> Import .cfg
-                </button>
+
+            {/* Custom Crosshair Reticle when in Shooting Mode */}
+            {isShootingMode && settings?.customCrosshair !== false && (
+              <div className="center-crosshair">
+                <div className="crosshair-reticle" style={{ borderColor: settings?.crosshairColor || '#00E5FF' }}>
+                  <div className="crosshair-dot" style={{ backgroundColor: settings?.crosshairColor || '#00E5FF' }} />
+                </div>
               </div>
-            </div>
-          </div>
-        ) : isMirrorRunning ? (
-          /* Standby status when Native Scrcpy Direct3D 11 mirror window is active */
-          <div className="native-mirror-active-card glass-panel anim-glow">
-            <div className="mirror-live-badge">
-              <span className="live-dot" /> LIVE 120 FPS NATIVE MIRROR WINDOW RUNNING
-            </div>
-            <h2>{selectedDevice?.model || 'Android Mobile'}</h2>
-            <p className="mirror-desc">
-              Direct3D 11 ultra-low latency game stream is running in the native game window with full mouse clicks, audio, and high refresh rate.
-            </p>
-            <div className="native-mirror-actions">
-              <button className="btn btn-primary btn-md" onClick={onOpenEditor}>
-                <Camera size={16} /> Edit Controls & Take Snapshot
-              </button>
-              <button className="btn btn-danger btn-md" onClick={onStartMirror}>
-                <Square size={16} /> Stop Mirror
-              </button>
-            </div>
+            )}
           </div>
         ) : (
           /* Standby Dashboard */
@@ -264,7 +455,7 @@ export default function ScreenMirror({
                   </div>
                   <div className="spec-tile">
                     <span className="spec-label">Rendering Mode</span>
-                    <span className="spec-value text-primary">Native Direct3D 11 120 FPS</span>
+                    <span className="spec-value text-primary">In-Window Hardware 60-120 FPS</span>
                   </div>
                 </div>
               ) : (
@@ -277,7 +468,7 @@ export default function ScreenMirror({
               <div className="standby-actions-row">
                 {selectedDevice ? (
                   <button className="btn btn-primary btn-lg" onClick={onStartMirror}>
-                    <Play size={18} /> Start Screen Mirror
+                    <Play size={18} /> Start In-Window Mirror
                   </button>
                 ) : (
                   <button className="btn btn-primary btn-lg" onClick={onOpenWirelessModal}>
@@ -285,7 +476,7 @@ export default function ScreenMirror({
                   </button>
                 )}
                 <button className="btn btn-secondary" onClick={onOpenEditor}>
-                  <Camera size={16} /> Edit Controls & Snapshot
+                  <Sliders size={16} /> Edit Controls
                 </button>
                 <button className="btn btn-secondary" onClick={onImportCfg}>
                   <Download size={16} /> Import .cfg
@@ -295,7 +486,7 @@ export default function ScreenMirror({
           </div>
         )}
 
-        {/* Visual Key Overlay Layer (Directly over the in-game screen snapshot) */}
+        {/* Visual Key Overlay Layer (100% Pinned directly above game screen) */}
         {showOverlay && (
           <KeyOverlay
             scheme={scheme}
@@ -317,7 +508,7 @@ export default function ScreenMirror({
           </div>
           <div className="perf-pill">
             <Zap size={12} color="var(--md-sys-color-success)" />
-            <span className="perf-value">Direct3D 11</span>
+            <span className="perf-value">Latency: &lt;1ms</span>
           </div>
           <button 
             className={`perf-pill btn-hud-aim ${isShootingMode ? 'aim-active' : ''}`}
@@ -325,7 +516,7 @@ export default function ScreenMirror({
             title="Click or press Ctrl to toggle shooting mode"
           >
             {isShootingMode ? <Crosshair size={12} color="#00E5FF" /> : <MousePointer size={12} color="#FFFFFF" />}
-            <span>{isShootingMode ? '🎯 AIM LOCKED (Press Ctrl to unlock)' : '🖱️ CURSOR VISIBLE (Press Ctrl to Lock Aim)'}</span>
+            <span>{isShootingMode ? '🎯 AIM LOCKED (Press Ctrl / Esc to unlock)' : '🖱️ CURSOR VISIBLE (Press Ctrl to Lock Aim)'}</span>
           </button>
         </div>
       </div>

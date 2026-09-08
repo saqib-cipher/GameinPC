@@ -156,17 +156,17 @@ ipcMain.handle('adb:capture-screenshot', async (event, serial) => {
   return await adbService.captureScreenshot(serial);
 });
 
-// Screen Mirroring Handlers (Native 120 FPS Direct3D 11 Mirror Window)
+// Screen Mirroring Handlers (Unified In-Window Stream Engine)
 ipcMain.handle('mirror:start', async (event, { serial, settings }) => {
-  const result = mirrorService.startMirror(serial, settings);
+  const result = await streamService.startStream(serial, settings);
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('mirror:status-changed', mirrorService.isRunning);
+    mainWindow.webContents.send('mirror:status-changed', streamService.isRunning);
   }
   return result;
 });
 
 ipcMain.handle('mirror:stop', async () => {
-  const result = mirrorService.stopMirror();
+  const result = streamService.stopStream();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('mirror:status-changed', false);
   }
@@ -175,15 +175,13 @@ ipcMain.handle('mirror:stop', async () => {
 
 ipcMain.handle('mirror:get-status', async () => {
   return { 
-    isRunning: mirrorService.isRunning, 
-    serial: mirrorService.currentSerial 
+    isRunning: streamService.isRunning, 
+    serial: streamService.activeDevice?.serial 
   };
 });
 
 ipcMain.handle('mirror:inject-touch', async (event, { pointerId, action, x, y }) => {
-  if (action === 0 && mirrorService.currentSerial) {
-    adbService.tap(mirrorService.currentSerial, x, y).catch(() => {});
-  }
+  streamService.injectTouch(pointerId, action, x, y);
   return true;
 });
 

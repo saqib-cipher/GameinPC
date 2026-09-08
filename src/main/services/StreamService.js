@@ -261,9 +261,14 @@ class StreamService {
           }
 
           // Format packet: [1-byte isKeyFlag] [Payload]
+          // If keyframe and configBuffer exists, ensure SPS/PPS is prepended for instant WebCodecs rendering
+          const payloadToSend = (isKeyFrame && !isConfig && this.configBuffer) 
+            ? Buffer.concat([this.configBuffer, framePayload]) 
+            : framePayload;
+
           const packetHeader = Buffer.alloc(1);
           packetHeader.writeUInt8(isKeyFrame ? 1 : 0, 0);
-          const fullPacket = Buffer.concat([packetHeader, framePayload]);
+          const fullPacket = Buffer.concat([packetHeader, payloadToSend]);
 
           this.broadcastBinary(fullPacket);
         }
