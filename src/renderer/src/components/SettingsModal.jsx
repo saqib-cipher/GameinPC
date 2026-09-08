@@ -78,15 +78,13 @@ export default function SettingsModal({
 
             <div className="form-group-row">
               <div className="form-field flex-1">
-                <label>Resolution Cap</label>
+                <label>Mirroring & Video Engine</label>
                 <select 
-                  value={localSettings.maxSize || 0} 
-                  onChange={(e) => handleChange('maxSize', parseInt(e.target.value, 10))}
+                  value={localSettings.renderEngine || 'direct3d11'} 
+                  onChange={(e) => handleChange('renderEngine', e.target.value)}
                 >
-                  <option value={0}>Native Mobile Resolution</option>
-                  <option value={1080}>1080p Full HD</option>
-                  <option value={1440}>1440p 2K QHD</option>
-                  <option value={720}>720p HD</option>
+                  <option value="direct3d11">⚡ Native Direct3D 11 (120 FPS Zero-Lag - Recommended)</option>
+                  <option value="canvas">🖥️ In-Window Canvas Stream</option>
                 </select>
               </div>
 
@@ -99,6 +97,21 @@ export default function SettingsModal({
                   <option value="direct3d11">Direct3D 11 (Windows Native)</option>
                   <option value="opengl">OpenGL</option>
                   <option value="vulkan">Vulkan</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group-row">
+              <div className="form-field flex-1">
+                <label>Resolution Cap</label>
+                <select 
+                  value={localSettings.maxSize || 0} 
+                  onChange={(e) => handleChange('maxSize', parseInt(e.target.value, 10))}
+                >
+                  <option value={0}>Native Mobile Resolution (Best Quality)</option>
+                  <option value={1080}>1080p Full HD</option>
+                  <option value={1440}>1440p 2K QHD</option>
+                  <option value={720}>720p HD</option>
                 </select>
               </div>
             </div>

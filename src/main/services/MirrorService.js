@@ -31,18 +31,23 @@ class MirrorService {
     this.currentSerial = serial;
     const args = ['--serial', serial];
 
-    // Video options
-    const bitrate = settings.bitrate || 8;
+    // 1. Ultra-low latency video options (120 FPS Direct3D 11)
+    const bitrate = settings.bitrate || 16;
     args.push(`--video-bit-rate=${bitrate}M`);
 
-    if (settings.maxFps) {
-      args.push(`--max-fps=${settings.maxFps}`);
-    }
+    const maxFps = settings.maxFps || 120;
+    args.push(`--max-fps=${maxFps}`);
 
     if (settings.maxSize && settings.maxSize > 0) {
       args.push(`--max-size=${settings.maxSize}`);
     }
 
+    // 2. Zero-latency buffer flags (instant raw frames)
+    args.push('--video-buffer=0');
+    args.push('--audio-buffer=20');
+    args.push('--render-driver=direct3d11');
+
+    // 3. Power & Device flags
     if (settings.stayAwake !== false) {
       args.push('--stay-awake');
     }
@@ -55,16 +60,10 @@ class MirrorService {
       args.push('--no-audio');
     }
 
-    // Low latency & performance tweaks
-    if (settings.lowLatencyMode !== false) {
-      args.push('--video-buffer=0');
-      args.push('--audio-buffer=20');
-    }
-
-    // Window settings
+    // 4. Window properties
     args.push('--window-title=GameinPC - Mirror View');
 
-    console.log(`Starting scrcpy: ${this.scrcpyPath} ${args.join(' ')}`);
+    console.log(`[MirrorService] Launching native zero-lag Scrcpy: ${this.scrcpyPath} ${args.join(' ')}`);
 
     try {
       const binDir = path.dirname(this.scrcpyPath);
@@ -103,7 +102,7 @@ class MirrorService {
         if (this.onStatusChange) this.onStatusChange(false);
       });
 
-      return { success: true, message: 'Screen mirror started successfully' };
+      return { success: true, message: 'Ultra-low latency Scrcpy mirror started' };
     } catch (err) {
       console.error('Failed to launch scrcpy:', err);
       this.isRunning = false;

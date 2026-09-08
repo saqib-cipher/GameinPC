@@ -140,17 +140,26 @@ ipcMain.handle('adb:swipe', async (event, { serial, x1, y1, x2, y2, duration }) 
   return await adbService.swipe(serial, x1, y1, x2, y2, duration);
 });
 
-// Screen Mirroring Handlers (In-Window Stream)
+// Screen Mirroring Handlers (Ultra-Low Latency Direct3D 11 Engine)
 ipcMain.handle('mirror:start', async (event, { serial, settings }) => {
-  const result = await streamService.startStream(serial, settings);
+  if (settings && settings.renderEngine === 'canvas') {
+    const result = await streamService.startStream(serial, settings);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mirror:status-changed', streamService.isRunning);
+    }
+    return result;
+  }
+
+  const result = mirrorService.startMirror(serial, settings);
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('mirror:status-changed', streamService.isRunning);
+    mainWindow.webContents.send('mirror:status-changed', mirrorService.isRunning);
   }
   return result;
 });
 
 ipcMain.handle('mirror:stop', async () => {
-  const result = streamService.stopStream();
+  streamService.stopStream();
+  const result = mirrorService.stopMirror();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('mirror:status-changed', false);
   }
@@ -158,7 +167,7 @@ ipcMain.handle('mirror:stop', async () => {
 });
 
 ipcMain.handle('mirror:get-status', async () => {
-  return { isRunning: streamService.isRunning, serial: streamService.activeDevice?.serial };
+  return { isRunning: mirrorService.isRunning || streamService.isRunning, serial: mirrorService.currentSerial || streamService.activeDevice?.serial };
 });
 
 // Keymapping & Config Handlers
