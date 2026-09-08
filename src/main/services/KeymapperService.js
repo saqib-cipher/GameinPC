@@ -60,6 +60,7 @@ class KeymapperService {
   sendTouchEvent(pointerId, action, xPercent, yPercent) {
     if (this.touchSender) {
       this.touchSender({ pointerId, action, x: xPercent, y: yPercent });
+      return;
     }
 
     if (this.currentDevice && action === 0) {

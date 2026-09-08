@@ -52,9 +52,11 @@ export default function ScreenMirror({
   // 1. Auto-Adjust Layout Engine (Calculates maximal fitting dimensions preserving native aspect ratio)
   const updateLayout = useCallback(() => {
     if (!workspaceRef.current) return;
-    const workspaceRect = workspaceRef.current.getBoundingClientRect();
-    const availW = Math.max(100, workspaceRect.width - 24); // 12px padding each side
-    const availH = Math.max(100, workspaceRect.height - 24);
+    const ws = workspaceRef.current;
+    const padX = 32; // 16px padding on left and right
+    const padY = 32; // 16px padding on top and bottom
+    const availW = Math.max(100, ws.clientWidth - padX);
+    const availH = Math.max(100, ws.clientHeight - padY);
 
     let targetRatio = 20 / 9; // Default mobile landscape ratio
     if (streamDim.width > 0 && streamDim.height > 0) {
@@ -94,6 +96,7 @@ export default function ScreenMirror({
   useEffect(() => {
     let ws = null;
     let decoder = null;
+    let isCleanedUp = false;
 
     if (isMirrorRunning) {
       const canvas = canvasRef.current;
@@ -102,7 +105,7 @@ export default function ScreenMirror({
       const initDecoder = (codecName = 'h264') => {
         if (!window.VideoDecoder || !ctx) return null;
         try {
-          if (decoder) {
+          if (decoder && decoder.state !== 'closed') {
             try { decoder.close(); } catch (e) {}
           }
 
@@ -117,6 +120,13 @@ export default function ScreenMirror({
                 canvas.width = videoFrame.displayWidth;
                 canvas.height = videoFrame.displayHeight;
                 setStreamDim({ width: videoFrame.displayWidth, height: videoFrame.displayHeight });
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'set-dimension',
+                    width: videoFrame.displayWidth,
+                    height: videoFrame.displayHeight
+                  }));
+                }
               }
               ctx.drawImage(videoFrame, 0, 0, canvas.width, canvas.height);
               videoFrame.close();
@@ -130,6 +140,7 @@ export default function ScreenMirror({
           dec.configure({
             codec: codecStr,
             optimizeForLatency: true,
+            hardwareAcceleration: 'prefer-hardware'
           });
 
           decoder = dec;
@@ -145,11 +156,12 @@ export default function ScreenMirror({
 
       // Connect to StreamService WebSocket
       try {
-        ws = new WebSocket('ws://127.0.0.1:27183');
+        ws = new WebSocket('ws://127.0.0.1:29170');
         ws.binaryType = 'arraybuffer';
         wsRef.current = ws;
 
         ws.onopen = () => {
+          if (isCleanedUp) return;
           setStreamConnected(true);
         };
 
@@ -195,6 +207,7 @@ export default function ScreenMirror({
         };
 
         ws.onclose = () => {
+          if (isCleanedUp) return;
           setStreamConnected(false);
         };
       } catch (err) {
@@ -203,10 +216,11 @@ export default function ScreenMirror({
     }
 
     return () => {
+      isCleanedUp = true;
       if (ws) {
         try { ws.close(); } catch (e) {}
       }
-      if (decoder) {
+      if (decoder && decoder.state !== 'closed') {
         try { decoder.close(); } catch (e) {}
       }
       decoderRef.current = null;

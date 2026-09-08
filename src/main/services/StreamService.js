@@ -8,14 +8,14 @@ const adbService = require('./AdbService');
 class StreamService {
   constructor() {
     this.wss = null;
-    this.wsPort = 27183;
+    this.wsPort = 29170;
     this.connectedClients = new Set();
     this.activeDevice = null;
     this.serverProcess = null;
     this.videoSocket = null;
     this.controlSocket = null;
     this.isRunning = false;
-    this.forwardPort = 27184;
+    this.forwardPort = 29174;
 
     this.deviceWidth = 1080;
     this.deviceHeight = 2400;
@@ -71,6 +71,11 @@ class StreamService {
       const data = JSON.parse(raw);
       if (data.type === 'touch') {
         this.injectTouch(data.pointerId || 0, data.action, data.x, data.y);
+      } else if (data.type === 'set-dimension') {
+        if (data.width > 0 && data.height > 0) {
+          this.deviceWidth = data.width;
+          this.deviceHeight = data.height;
+        }
       }
     } catch (e) {
       // Ignore binary / malformed
@@ -164,7 +169,7 @@ class StreamService {
       // 4. Launch scrcpy-server with send_frame_meta=true for zero-jitter framing
       const bitrate = (settings.bitrate || 16) * 1000000;
       const maxFps = settings.maxFps || 120;
-      const maxSize = settings.maxSize || 0;
+      const maxSize = settings.maxSize || 1920;
 
       const serverArgs = [
         '-s', serial,
@@ -184,7 +189,6 @@ class StreamService {
         'send_device_meta=false',
         'send_frame_meta=true',
         'send_dummy_byte=false',
-        'send_codec_meta=true',
         'raw_stream=false'
       ];
 
@@ -245,7 +249,7 @@ class StreamService {
           const ptsHigh = incomingBuffer.readUInt32BE(0);
           const ptsLow = incomingBuffer.readUInt32BE(4);
           const isConfig = (ptsHigh & 0x80000000) !== 0; // SPS / PPS config packet
-          const isKeyFrame = (ptsHigh & 0x40000000) !== 0 || isConfig;
+          const isKeyFrame = (ptsHigh & 0x40000000) !== 0;
           const frameSize = incomingBuffer.readUInt32BE(8);
 
           if (incomingBuffer.length < 12 + frameSize) {
@@ -258,11 +262,12 @@ class StreamService {
 
           if (isConfig) {
             this.configBuffer = framePayload;
+            continue; // SPS/PPS parameter set cached, wait for IDR frame
           }
 
           // Format packet: [1-byte isKeyFlag] [Payload]
           // If keyframe and configBuffer exists, ensure SPS/PPS is prepended for instant WebCodecs rendering
-          const payloadToSend = (isKeyFrame && !isConfig && this.configBuffer) 
+          const payloadToSend = (isKeyFrame && this.configBuffer) 
             ? Buffer.concat([this.configBuffer, framePayload]) 
             : framePayload;
 
