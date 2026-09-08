@@ -11,20 +11,26 @@ class AdbService {
   }
 
   resolveAdbPath() {
-    // 1. Check bundled bin/adb.exe
+    // 1. Check packaged resources bin/adb.exe
+    if (process.resourcesPath) {
+      const packagedAdb = path.join(process.resourcesPath, 'bin', 'adb.exe');
+      if (fs.existsSync(packagedAdb)) return packagedAdb;
+    }
+
+    // 2. Check bundled bin/adb.exe
     const bundledPath = path.resolve(__dirname, '../../../bin/adb.exe');
     if (fs.existsSync(bundledPath)) {
       return bundledPath;
     }
 
-    // 2. Check Android SDK default path
+    // 3. Check Android SDK default path
     const localAppData = process.env.LOCALAPPDATA || '';
     const sdkAdb = path.join(localAppData, 'Android', 'Sdk', 'platform-tools', 'adb.exe');
     if (fs.existsSync(sdkAdb)) {
       return sdkAdb;
     }
 
-    // 3. Fallback to system adb
+    // 4. Fallback to system adb
     return 'adb';
   }
 

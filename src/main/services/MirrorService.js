@@ -12,6 +12,10 @@ class MirrorService {
   }
 
   resolveScrcpyPath() {
+    if (process.resourcesPath) {
+      const packagedScrcpy = path.join(process.resourcesPath, 'bin', 'scrcpy.exe');
+      if (fs.existsSync(packagedScrcpy)) return packagedScrcpy;
+    }
     const bundled = path.resolve(__dirname, '../../../bin/scrcpy.exe');
     if (fs.existsSync(bundled)) {
       return bundled;

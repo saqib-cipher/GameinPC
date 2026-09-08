@@ -3,23 +3,78 @@
   "version": "1.0.0",
   "description": "Professional Mobile Screen Mirror & Keymapping Software for PC - Zero Emulator Detection",
   "main": "src/main/main.js",
+  "author": {
+    "name": "Saqib Cipher",
+    "email": "mohd.saqib.sd@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saqib-cipher/GameinPC.git"
+  },
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "start": "electron .",
-    "app": "concurrently \"vite\" \"electron .\""
+    "app": "concurrently \"vite\" \"electron .\"",
+    "dist": "npm run build && electron-builder --win",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:all": "npm run build && electron-builder --win nsis portable"
   },
-  "keywords": [
-    "scrcpy",
-    "adb",
-    "keymapper",
-    "screen-mirror",
-    "android-gaming",
-    "fps-aim",
-    "gamepad"
-  ],
-  "author": "Antigravity",
-  "license": "MIT",
+  "build": {
+    "appId": "com.gameinpc.app",
+    "productName": "GameinPC",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "com.dts.freefiremax.cfg",
+        "to": "com.dts.freefiremax.cfg"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "bin/scrcpy.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GameinPC",
+      "runAfterFinish": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    }
+  },
   "dependencies": {
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
@@ -32,6 +87,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
     "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
     "vite": "^6.2.0"
   }
 }

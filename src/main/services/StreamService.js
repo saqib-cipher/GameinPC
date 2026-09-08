@@ -120,7 +120,11 @@ class StreamService {
 
     try {
       const adb = adbService.resolveAdbPath();
-      const serverJarLocal = path.resolve(__dirname, '../../../bin/scrcpy-server');
+      let serverJarLocal = path.resolve(__dirname, '../../../bin/scrcpy-server');
+      if (process.resourcesPath) {
+        const packagedJar = path.join(process.resourcesPath, 'bin', 'scrcpy-server');
+        if (fs.existsSync(packagedJar)) serverJarLocal = packagedJar;
+      }
       const serverJarDevice = '/data/local/tmp/scrcpy-server.jar';
 
       // 1. Get device screen resolution
