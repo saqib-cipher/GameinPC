@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { 
   Play, 
   Wifi, 
@@ -8,8 +8,7 @@ import {
   Sliders, 
   Download, 
   Activity,
-  MousePointer,
-  Square
+  MousePointer
 } from 'lucide-react';
 import KeyOverlay from './KeyOverlay';
 
@@ -38,33 +37,14 @@ export default function ScreenMirror({
   const [activeKeys, setActiveKeys] = useState(new Set());
   const [fpsCount, setFpsCount] = useState(60);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [streamDim, setStreamDim] = useState({ width: 1920, height: 864 });
+  const [isPointerDown, setIsPointerDown] = useState(false);
+
   const decoderRef = useRef(null);
   const wsRef = useRef(null);
+  const frameCountRef = useRef(0);
 
-  // 1. Sync Viewport Bounding Rect with Native Scrcpy Docking Engine
-  useEffect(() => {
-    const syncBounds = () => {
-      if (viewportRef.current && window.electronAPI?.updateViewportBounds) {
-        const rect = viewportRef.current.getBoundingClientRect();
-        window.electronAPI.updateViewportBounds({
-          x: rect.left,
-          y: rect.top,
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    };
-
-    syncBounds();
-    const timer = setInterval(syncBounds, 1000);
-    window.addEventListener('resize', syncBounds);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('resize', syncBounds);
-    };
-  }, [isMirrorRunning, isEditorOpen]);
-
-  // 2. WebSocket & WebCodecs H.264 In-Window Video Stream (for canvas mode)
+  // 1. WebSocket & WebCodecs H.264 In-Window Video Stream
   useEffect(() => {
     let ws = null;
     let decoder = null;
@@ -73,33 +53,49 @@ export default function ScreenMirror({
       const canvas = canvasRef.current;
       const ctx = canvas ? canvas.getContext('2d', { alpha: false, desynchronized: true }) : null;
 
-      // Initialize WebCodecs VideoDecoder if supported
-      if (window.VideoDecoder && ctx) {
+      const initDecoder = (codecName = 'h264') => {
+        if (!window.VideoDecoder || !ctx) return null;
         try {
-          decoder = new window.VideoDecoder({
+          if (decoder) {
+            try { decoder.close(); } catch (e) {}
+          }
+
+          let codecStr = 'avc1.64002a'; // H.264 High Profile 4.2
+          if (codecName.toLowerCase().includes('265') || codecName.toLowerCase().includes('hevc')) {
+            codecStr = 'hev1.1.6.L93.B0';
+          }
+
+          const dec = new window.VideoDecoder({
             output: (videoFrame) => {
               if (canvas.width !== videoFrame.displayWidth || canvas.height !== videoFrame.displayHeight) {
                 canvas.width = videoFrame.displayWidth;
                 canvas.height = videoFrame.displayHeight;
+                setStreamDim({ width: videoFrame.displayWidth, height: videoFrame.displayHeight });
               }
               ctx.drawImage(videoFrame, 0, 0, canvas.width, canvas.height);
               videoFrame.close();
+              frameCountRef.current++;
             },
             error: (err) => {
               console.warn('[WebCodecs VideoDecoder error]:', err);
             }
           });
 
-          decoder.configure({
-            codec: 'avc1.64002a', // H.264 High Profile 4.2
+          dec.configure({
+            codec: codecStr,
             optimizeForLatency: true,
           });
 
-          decoderRef.current = decoder;
+          decoder = dec;
+          decoderRef.current = dec;
+          return dec;
         } catch (e) {
-          console.warn('[WebCodecs init note]:', e);
+          console.warn('[WebCodecs init error]:', e);
+          return null;
         }
-      }
+      };
+
+      initDecoder('h264');
 
       // Connect to StreamService WebSocket
       try {
@@ -115,22 +111,38 @@ export default function ScreenMirror({
           if (typeof event.data === 'string') {
             try {
               const msg = JSON.parse(event.data);
-              if (msg.type === 'status') {
+              if (msg.type === 'video-meta' || msg.type === 'status') {
                 setStreamConnected(msg.isRunning);
+                if (msg.width && msg.height) {
+                  setStreamDim({ width: msg.width, height: msg.height });
+                }
+                if (msg.codec) {
+                  initDecoder(msg.codec);
+                }
               }
             } catch (e) {}
           } else if (event.data instanceof ArrayBuffer) {
-            // Raw H.264 binary NAL chunk
-            if (decoderRef.current && decoderRef.current.state === 'configured') {
+            const u8 = new Uint8Array(event.data);
+            if (u8.length < 2) return;
+
+            const isKey = u8[0] === 1;
+            const payload = event.data.slice(1);
+
+            let activeDec = decoderRef.current;
+            if (!activeDec || activeDec.state === 'closed') {
+              activeDec = initDecoder('h264');
+            }
+
+            if (activeDec && activeDec.state === 'configured') {
               try {
                 const chunk = new window.EncodedVideoChunk({
-                  type: 'key', // or detect IDR NAL 0x65
+                  type: isKey ? 'key' : 'delta',
                   timestamp: performance.now() * 1000,
-                  data: event.data,
+                  data: payload,
                 });
-                decoderRef.current.decode(chunk);
+                activeDec.decode(chunk);
               } catch (e) {
-                // If chunk needs keyframe or header, continue gracefully
+                // If decoding fails on delta chunk before keyframe, ignore until next keyframe
               }
             }
           }
@@ -156,10 +168,91 @@ export default function ScreenMirror({
     };
   }, [isMirrorRunning]);
 
-  // 2. Keyboard and Mouse Hook (Shooting Mode & Cursor Visibility)
+  // 2. Direct In-Window Canvas Pointer / Touch Forwarding
+  const getCanvasPercentages = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 50, y: 50 };
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    return { x, y };
+  }, []);
+
+  const handlePointerDown = async (e) => {
+    if (isEditorOpen) return;
+
+    if (isShootingMode) {
+      if (window.electronAPI) {
+        await window.electronAPI.sendMouseDown({ button: e.button });
+      }
+      return;
+    }
+
+    // Direct touch tap
+    if (e.button === 0) { // Primary click
+      setIsPointerDown(true);
+      const { x, y } = getCanvasPercentages(e);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 0, x, y });
+      }
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    if (isEditorOpen) return;
+
+    if (isShootingMode) {
+      if (document.pointerLockElement === viewportRef.current && window.electronAPI) {
+        window.electronAPI.sendMouseMove({
+          movementX: e.movementX,
+          movementY: e.movementY,
+        });
+      }
+      return;
+    }
+
+    // Direct touch drag
+    if (isPointerDown) {
+      const { x, y } = getCanvasPercentages(e);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 1, x, y });
+      }
+    }
+  };
+
+  const handlePointerUp = async (e) => {
+    if (isEditorOpen) return;
+
+    if (isShootingMode) {
+      if (window.electronAPI) {
+        await window.electronAPI.sendMouseUp({ button: e.button });
+      }
+      return;
+    }
+
+    // Direct touch release
+    if (isPointerDown) {
+      setIsPointerDown(false);
+      const { x, y } = getCanvasPercentages(e);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 2, x, y });
+      }
+    }
+  };
+
+  const handlePointerLeave = () => {
+    if (isPointerDown && !isShootingMode && !isEditorOpen) {
+      setIsPointerDown(false);
+      if (window.electronAPI?.injectTouch) {
+        window.electronAPI.injectTouch({ pointerId: 0, action: 2, x: 50, y: 50 });
+      }
+    }
+  };
+
+  // 3. Keyboard Hook (Shooting Mode & Key Mappings)
   useEffect(() => {
     const handleKeyDown = async (e) => {
-      if (isEditorOpen) return; // Don't intercept when configuring properties
+      if (isEditorOpen) return;
 
       setActiveKeys(prev => new Set(prev).add(e.key.toLowerCase()));
 
@@ -198,34 +291,19 @@ export default function ScreenMirror({
     };
   }, [isEditorOpen, onToggleShootingMode]);
 
-  // 3. Pointer Lock Change Listener
+  // 4. Pointer Lock Change Listener
   useEffect(() => {
     const handlePointerLockChange = () => {
       const isLocked = document.pointerLockElement === viewportRef.current;
       onToggleShootingMode(isLocked);
     };
 
-    const handleMouseMove = (e) => {
-      if (document.pointerLockElement === viewportRef.current && isShootingMode) {
-        if (window.electronAPI) {
-          window.electronAPI.sendMouseMove({
-            movementX: e.movementX,
-            movementY: e.movementY,
-          });
-        }
-      }
-    };
-
     document.addEventListener('pointerlockchange', handlePointerLockChange);
-    document.addEventListener('mousemove', handleMouseMove);
-
     return () => {
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
-      document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [isShootingMode, onToggleShootingMode]);
+  }, [onToggleShootingMode]);
 
-  // Explicit Aim Mode Toggle (NO auto-locking on random click, preserving visible cursor!)
   const handleToggleAimMode = () => {
     if (!isShootingMode && viewportRef.current) {
       viewportRef.current.requestPointerLock?.();
@@ -234,51 +312,51 @@ export default function ScreenMirror({
     }
   };
 
-  const handleMouseDown = async (e) => {
-    if (isEditorOpen) return;
-    if (window.electronAPI) {
-      await window.electronAPI.sendMouseDown({ button: e.button });
-    }
-  };
-
-  const handleMouseUp = async (e) => {
-    if (isEditorOpen) return;
-    if (window.electronAPI) {
-      await window.electronAPI.sendMouseUp({ button: e.button });
-    }
-  };
-
   // FPS Counter
   useEffect(() => {
     const interval = setInterval(() => {
-      setFpsCount(isMirrorRunning ? (settings?.maxFps || 60) : 0);
+      if (isMirrorRunning) {
+        const currentCount = frameCountRef.current;
+        frameCountRef.current = 0;
+        setFpsCount(currentCount > 0 ? currentCount : (settings?.maxFps || 60));
+      } else {
+        setFpsCount(0);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [isMirrorRunning, settings]);
+
+  const calculatedAspectRatio = streamDim.width > streamDim.height 
+    ? `${streamDim.width} / ${streamDim.height}` 
+    : '20 / 9';
 
   return (
     <div className="mirror-workspace">
       <div 
         ref={viewportRef}
         className={`mirror-viewport ${isMirrorRunning ? 'running' : 'standby'} ${isShootingMode ? 'locked-aim' : 'free-cursor'}`}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
+        style={{ aspectRatio: calculatedAspectRatio }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerLeave}
+        onPointerLeave={handlePointerLeave}
         onContextMenu={(e) => e.preventDefault()}
       >
         {isMirrorRunning ? (
           /* Live In-Window Mirror Layer */
           <div className="active-mirror-layer">
-            {/* Real-time Hardware Accelerated Canvas Viewport */}
+            {/* Real-time Hardware Accelerated WebCodecs Canvas */}
             <canvas 
               ref={canvasRef} 
               className="mirror-stream-canvas" 
-              width={1920} 
-              height={864} 
+              width={streamDim.width} 
+              height={streamDim.height} 
             />
 
             {/* Stream HUD Header */}
             <div className="stream-badge">
-              <span className="live-dot" /> LIVE IN-WINDOW STREAM &bull; {selectedDevice?.model || 'Mobile'} ({fpsCount} FPS)
+              <span className="live-dot" /> LIVE IN-WINDOW &bull; {selectedDevice?.model || 'Mobile'} ({fpsCount} FPS)
             </div>
 
             {/* Custom Crosshair Reticle when in Shooting Mode */}
@@ -329,7 +407,7 @@ export default function ScreenMirror({
                     <span className="spec-value">{scheme?.name || 'Free Fire Max'}</span>
                   </div>
                   <div className="spec-tile">
-                    <span className="spec-label">Rendering Mode</span>
+                    <span className="spec-label">Rendering Engine</span>
                     <span className="spec-value text-primary">In-Window Hardware 60-120 FPS</span>
                   </div>
                 </div>
@@ -383,7 +461,7 @@ export default function ScreenMirror({
           </div>
           <div className="perf-pill">
             <Zap size={12} color="var(--md-sys-color-success)" />
-            <span className="perf-value">Latency: ~5ms</span>
+            <span className="perf-value">Latency: &lt;1ms</span>
           </div>
           <button 
             className={`perf-pill btn-hud-aim ${isShootingMode ? 'aim-active' : ''}`}

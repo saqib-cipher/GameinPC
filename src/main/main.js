@@ -56,6 +56,12 @@ function createWindow() {
   const parentHwnd = hwndBuffer.readBigInt64LE ? hwndBuffer.readBigInt64LE(0) : hwndBuffer.readInt32LE(0);
   mirrorService.setParentHwnd(parentHwnd);
 
+  streamService.onStatusChange = (isRunning) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mirror:status-changed', isRunning);
+    }
+  };
+
   mirrorService.onStatusChange = (isRunning) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('mirror:status-changed', isRunning);
@@ -63,6 +69,7 @@ function createWindow() {
   };
 
   mainWindow.on('closed', () => {
+    streamService.stopStream();
     mirrorService.stopMirror();
     mainWindow = null;
   });
@@ -77,6 +84,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  streamService.stopStream();
   mirrorService.stopMirror();
   if (process.platform !== 'darwin') app.quit();
 });
@@ -144,26 +152,18 @@ ipcMain.handle('adb:swipe', async (event, { serial, x1, y1, x2, y2, duration }) 
   return await adbService.swipe(serial, x1, y1, x2, y2, duration);
 });
 
-// Screen Mirroring Handlers (Ultra-Low Latency Direct3D 11 Engine)
+// Screen Mirroring Handlers (Unified In-Window Hardware Accelerated Stream Engine)
 ipcMain.handle('mirror:start', async (event, { serial, settings }) => {
-  if (settings && settings.renderEngine === 'canvas') {
-    const result = await streamService.startStream(serial, settings);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mirror:status-changed', streamService.isRunning);
-    }
-    return result;
-  }
-
-  const result = mirrorService.startMirror(serial, settings);
+  const result = await streamService.startStream(serial, settings);
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('mirror:status-changed', mirrorService.isRunning);
+    mainWindow.webContents.send('mirror:status-changed', streamService.isRunning);
   }
   return result;
 });
 
 ipcMain.handle('mirror:stop', async () => {
-  streamService.stopStream();
-  const result = mirrorService.stopMirror();
+  const result = streamService.stopStream();
+  mirrorService.stopMirror();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('mirror:status-changed', false);
   }
@@ -171,7 +171,15 @@ ipcMain.handle('mirror:stop', async () => {
 });
 
 ipcMain.handle('mirror:get-status', async () => {
-  return { isRunning: mirrorService.isRunning || streamService.isRunning, serial: mirrorService.currentSerial || streamService.activeDevice?.serial };
+  return { 
+    isRunning: streamService.isRunning, 
+    serial: streamService.activeDevice?.serial 
+  };
+});
+
+ipcMain.handle('mirror:inject-touch', async (event, { pointerId, action, x, y }) => {
+  streamService.injectTouch(pointerId, action, x, y);
+  return true;
 });
 
 ipcMain.handle('mirror:update-bounds', (event, bounds) => {
