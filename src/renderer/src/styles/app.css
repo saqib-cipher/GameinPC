@@ -461,58 +461,65 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 30px;
+  padding: 16px;
+  overflow-y: auto;
+  box-sizing: border-box;
   background: radial-gradient(ellipse at center, rgba(0, 229, 255, 0.05) 0%, rgba(11, 13, 19, 0.95) 80%);
 }
 
 .standby-card {
-  max-width: 600px;
+  max-width: 560px;
   width: 100%;
-  padding: 30px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   background: rgba(18, 21, 31, 0.9);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
 }
 
 .standby-header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .device-avatar {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-md);
   background: var(--md-sys-color-surface-container);
   border: 1px solid rgba(0, 229, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .device-title-col h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #FFFFFF;
+  margin: 0 0 2px 0;
 }
 
 .device-meta {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--md-sys-color-on-surface-variant);
 }
 
 .device-specs-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .spec-tile {
   background: var(--md-sys-color-surface);
   border: 1px solid var(--glass-border);
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
@@ -520,12 +527,12 @@
 }
 
 .spec-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--md-sys-color-on-surface-muted);
 }
 
 .spec-value {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--md-sys-color-on-surface);
 }
@@ -537,21 +544,21 @@
 .connect-guide-box {
   background: rgba(0, 0, 0, 0.3);
   border-radius: var(--radius-sm);
-  padding: 14px;
-  font-size: 13px;
+  padding: 12px;
+  font-size: 12px;
   color: var(--md-sys-color-on-surface-variant);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .standby-actions-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .btn-lg {
-  padding: 10px 20px;
-  font-size: 14px;
+  padding: 8px 18px;
+  font-size: 13px;
 }
 
 /* Performance HUD (Bottom-Left) */

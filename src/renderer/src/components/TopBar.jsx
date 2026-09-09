@@ -5,11 +5,6 @@ import {
   Smartphone, 
   Wifi, 
   RefreshCw, 
-  Download, 
-  Upload, 
-  Copy, 
-  Trash2, 
-  Plus, 
   Settings, 
   Maximize2, 
   Minimize2, 
@@ -17,11 +12,8 @@ import {
   Eye, 
   EyeOff, 
   Sliders, 
-  PowerOff,
-  Play,
-  Square,
-  MonitorOff,
-  HelpCircle
+  Play, 
+  Square 
 } from 'lucide-react';
 
 export default function TopBar({
@@ -154,14 +146,14 @@ export default function TopBar({
 
       {/* Control Scheme, Actions & Window Controls */}
       <div className="topbar-right">
-        {/* Scheme Selector & Actions (Matching Screenshot icons) */}
+        {/* Scheme Selector */}
         <div className="scheme-bar">
           <div className="scheme-label">
             {isGameDetected ? (
               <span className="game-detected-tag" title={`Active Game: ${foregroundPackage}`}>
                 🎮 Game Active
               </span>
-            ) : 'Control scheme:'}
+            ) : 'Scheme:'}
           </div>
           <div className="scheme-select-wrapper">
             <select 
@@ -174,26 +166,6 @@ export default function TopBar({
               ))}
             </select>
           </div>
-
-          <div className="scheme-actions">
-            <button className="btn-icon" onClick={onImportCfg} title="Import Keymap (.cfg / JSON)">
-              <Download size={16} />
-            </button>
-            <button className="btn-icon" onClick={onExportCfg} title="Export Keymap (.cfg)">
-              <Upload size={16} />
-            </button>
-            <button className="btn-icon" onClick={onCloneScheme} title="Clone Scheme">
-              <Copy size={16} />
-            </button>
-            <button className="btn-icon" onClick={onNewScheme} title="New Scheme">
-              <Plus size={16} />
-            </button>
-            {schemes.length > 1 && (
-              <button className="btn-icon btn-icon-danger" onClick={onDeleteScheme} title="Delete Scheme">
-                <Trash2 size={16} />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Action Buttons */}
@@ -202,26 +174,17 @@ export default function TopBar({
           <button 
             className={`btn ${isMirrorRunning ? 'btn-danger' : 'btn-primary'}`}
             onClick={onToggleMirror}
-            title={isMirrorRunning ? 'Stop Screen Mirror' : 'Start Screen Mirror'}
+            title={isMirrorRunning ? 'Stop Screen Mirror' : 'Start In-Window Mirror'}
           >
             {isMirrorRunning ? <Square size={14} /> : <Play size={14} />}
-            <span>{isMirrorRunning ? 'Stop Mirror' : 'Mirror Screen'}</span>
-          </button>
-
-          {/* Turn phone screen off toggle */}
-          <button 
-            className={`btn-icon ${isScreenOff ? 'active-glow' : ''}`}
-            onClick={onToggleScreenOff}
-            title="Turn Off Mobile Screen (Saves Battery & Heat)"
-          >
-            <MonitorOff size={16} />
+            <span>{isMirrorRunning ? 'Stop Mirror' : 'Start Mirror'}</span>
           </button>
 
           {/* Key Overlay Visibility Toggle */}
           <button 
             className={`btn-icon ${showOverlay ? 'active-glow' : ''}`}
             onClick={onToggleOverlay}
-            title="Toggle Key Overlay (F1)"
+            title="Toggle Key Overlay"
           >
             {showOverlay ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>

@@ -9,16 +9,17 @@ class StreamService {
   constructor() {
     this.wss = null;
     this.wsPort = 29170;
+    this.reversePort = 29175;
     this.connectedClients = new Set();
     this.activeDevice = null;
     this.serverProcess = null;
+    this.localTcpServer = null;
     this.videoSocket = null;
     this.controlSocket = null;
     this.isRunning = false;
-    this.forwardPort = 29174;
 
-    this.deviceWidth = 1080;
-    this.deviceHeight = 2400;
+    this.deviceWidth = 1280;
+    this.deviceHeight = 720;
     this.codec = 'h264';
     this.configBuffer = null; // Cached SPS / PPS for instant client start
     this.onStatusChange = null;
@@ -84,8 +85,8 @@ class StreamService {
 
   // High-speed binary touch injection directly into scrcpy control socket (<1ms)
   injectTouch(pointerId, action, xPercent, yPercent) {
-    const width = this.deviceWidth || 1080;
-    const height = this.deviceHeight || 2400;
+    const width = this.deviceWidth || 1280;
+    const height = this.deviceHeight || 720;
     const px = Math.max(0, Math.min(width, Math.round((xPercent / 100) * width)));
     const py = Math.max(0, Math.min(height, Math.round((yPercent / 100) * height)));
 
@@ -99,16 +100,6 @@ class StreamService {
 
     try {
       // Scrcpy 4.1 INJECT_TOUCH_EVENT message (32 bytes):
-      // struct {
-      //   uint8_t type = 2;
-      //   uint8_t action; // 0=DOWN, 1=UP, 2=MOVE
-      //   uint64_t pointer_id;
-      //   uint32_t x, y;
-      //   uint16_t width, height;
-      //   uint16_t pressure;
-      //   uint32_t action_button;
-      //   uint32_t buttons;
-      // }
       const buf = Buffer.alloc(32);
       buf.writeUInt8(2, 0); // type: INJECT_TOUCH_EVENT
 
@@ -154,19 +145,110 @@ class StreamService {
       if (details?.resolution) {
         this.deviceWidth = details.resolution.width;
         this.deviceHeight = details.resolution.height;
-      } else {
-        this.deviceWidth = 1080;
-        this.deviceHeight = 2400;
       }
 
       // 2. Push scrcpy-server.jar
       await adbService.runAdbCommand(['-s', serial, 'push', serverJarLocal, serverJarDevice]);
 
-      // 3. Setup ADB forward tunnel
-      const tunnelPort = this.forwardPort;
-      await adbService.runAdbCommand(['-s', serial, 'forward', `tcp:${tunnelPort}`, 'localabstract:scrcpy']);
+      // 3. Setup local reverse TCP server
+      await new Promise((resolve, reject) => {
+        this.localTcpServer = net.createServer();
+        this.localTcpServer.listen(this.reversePort, '127.0.0.1', async (err) => {
+          if (err) return reject(err);
+          console.log(`[StreamService] Reverse TCP server listening on port ${this.reversePort}`);
+          await adbService.runAdbCommand(['-s', serial, 'reverse', 'localabstract:scrcpy', `tcp:${this.reversePort}`]);
+          resolve();
+        });
+      });
 
-      // 4. Launch scrcpy-server with send_frame_meta=true for zero-jitter framing
+      let metaReceived = false;
+      let incomingBuffer = Buffer.alloc(0);
+
+      this.localTcpServer.on('connection', (socket) => {
+        if (!this.videoSocket) {
+          this.videoSocket = socket;
+          console.log('[StreamService] Video socket connected from scrcpy-server!');
+          this.isRunning = true;
+          this.broadcastStatus(true);
+          if (this.onStatusChange) this.onStatusChange(true);
+
+          socket.on('data', (chunk) => {
+            incomingBuffer = Buffer.concat([incomingBuffer, chunk]);
+
+            // 16-byte metadata header: 4 bytes codec + 4 bytes flags/w + 4 bytes height + 4 bytes width
+            if (!metaReceived) {
+              if (incomingBuffer.length >= 16) {
+                metaReceived = true;
+                this.codec = incomingBuffer.slice(0, 4).toString('ascii').replace(/\0/g, '').trim() || 'h264';
+                const h = incomingBuffer.readUInt32BE(8);
+                const w = incomingBuffer.readUInt32BE(12);
+                if (w > 0 && h > 0) {
+                  this.deviceWidth = w;
+                  this.deviceHeight = h;
+                }
+                console.log(`[StreamService] Stream Meta parsed: Codec="${this.codec}", Dimensions=${this.deviceWidth}x${this.deviceHeight}`);
+                incomingBuffer = incomingBuffer.slice(16);
+                this.broadcastMeta();
+              } else {
+                return;
+              }
+            }
+
+            // Packet parsing: [8-byte PTS] [4-byte Size] [Payload]
+            while (incomingBuffer.length >= 12) {
+              const ptsHigh = incomingBuffer.readUInt32BE(0);
+              const isConfig = (ptsHigh & 0x80000000) !== 0;
+              const isKeyFrame = (ptsHigh & 0x40000000) !== 0;
+              const frameSize = incomingBuffer.readUInt32BE(8);
+
+              if (incomingBuffer.length < 12 + frameSize) {
+                break; // Incomplete frame, wait for next socket chunk
+              }
+
+              const framePayload = incomingBuffer.slice(12, 12 + frameSize);
+              incomingBuffer = incomingBuffer.slice(12 + frameSize);
+
+              if (isConfig || framePayload.includes(Buffer.from([0, 0, 0, 1, 0x67]))) {
+                this.configBuffer = framePayload;
+              }
+
+              const isKey = isKeyFrame || Boolean(this.configBuffer && framePayload.includes(Buffer.from([0, 0, 0, 1, 0x65])));
+
+              // If keyframe and configBuffer exists, prepend SPS/PPS for instant WebCodecs rendering
+              const payloadToSend = (isKey && this.configBuffer && !framePayload.includes(Buffer.from([0, 0, 0, 1, 0x67])))
+                ? Buffer.concat([this.configBuffer, framePayload])
+                : framePayload;
+
+              const packetHeader = Buffer.alloc(1);
+              packetHeader.writeUInt8(isKey ? 1 : 0, 0);
+              const fullPacket = Buffer.concat([packetHeader, payloadToSend]);
+
+              this.broadcastBinary(fullPacket);
+            }
+          });
+
+          socket.on('close', () => {
+            console.log('[StreamService] Video socket closed');
+            this.videoSocket = null;
+            this.isRunning = false;
+            this.broadcastStatus(false);
+            if (this.onStatusChange) this.onStatusChange(false);
+          });
+
+          socket.on('error', (err) => {
+            console.warn('[StreamService] Video socket error:', err.message);
+          });
+        } else if (!this.controlSocket) {
+          this.controlSocket = socket;
+          console.log('[StreamService] Control socket connected - sub-millisecond touch active!');
+          socket.on('close', () => {
+            this.controlSocket = null;
+          });
+          socket.on('error', (e) => console.warn('[StreamService] Control socket note:', e.message));
+        }
+      });
+
+      // 4. Launch scrcpy-server with send_frame_meta=true
       const bitrate = (settings.bitrate || 16) * 1000000;
       const maxFps = settings.maxFps || 120;
       const maxSize = settings.maxSize || 1920;
@@ -179,7 +261,6 @@ class StreamService {
         '/',
         'com.genymobile.scrcpy.Server',
         '4.1',
-        'tunnel_forward=true',
         `video_bit_rate=${bitrate}`,
         `max_fps=${maxFps}`,
         `max_size=${maxSize}`,
@@ -203,103 +284,6 @@ class StreamService {
         console.warn(`[scrcpy-server err]: ${d.toString().trim()}`);
       });
 
-      // 5. Connect to Video Socket (first connection)
-      await new Promise(r => setTimeout(r, 600));
-
-      const videoSock = new net.Socket();
-      this.videoSocket = videoSock;
-
-      let metaReceived = false;
-      let incomingBuffer = Buffer.alloc(0);
-
-      videoSock.connect(tunnelPort, '127.0.0.1', () => {
-        console.log(`[StreamService] Video stream socket connected on port ${tunnelPort}`);
-        this.isRunning = true;
-        this.broadcastStatus(true);
-        if (this.onStatusChange) this.onStatusChange(true);
-      });
-
-      videoSock.on('data', (chunk) => {
-        incomingBuffer = Buffer.concat([incomingBuffer, chunk]);
-
-        // First 12 bytes = Codec metadata: 4 bytes codec + 4 bytes width + 4 bytes height
-        if (!metaReceived) {
-          if (incomingBuffer.length >= 12) {
-            metaReceived = true;
-            this.codec = incomingBuffer.slice(0, 4).toString('ascii').replace(/\0/g, '').trim() || 'h264';
-            const w = incomingBuffer.readUInt32BE(4);
-            const h = incomingBuffer.readUInt32BE(8);
-            if (w > 0 && h > 0) {
-              this.deviceWidth = w;
-              this.deviceHeight = h;
-            }
-            console.log(`[StreamService] Stream Meta parsed: Codec="${this.codec}", Dimensions=${this.deviceWidth}x${this.deviceHeight}`);
-
-            incomingBuffer = incomingBuffer.slice(12);
-
-            // Broadcast video metadata to all clients
-            this.broadcastMeta();
-          } else {
-            return;
-          }
-        }
-
-        // Parse discrete video frame packets: [8-byte PTS] [4-byte Size] [Payload]
-        while (incomingBuffer.length >= 12) {
-          const ptsHigh = incomingBuffer.readUInt32BE(0);
-          const ptsLow = incomingBuffer.readUInt32BE(4);
-          const isConfig = (ptsHigh & 0x80000000) !== 0; // SPS / PPS config packet
-          const isKeyFrame = (ptsHigh & 0x40000000) !== 0;
-          const frameSize = incomingBuffer.readUInt32BE(8);
-
-          if (incomingBuffer.length < 12 + frameSize) {
-            // Incomplete frame, wait for next socket chunk
-            break;
-          }
-
-          const framePayload = incomingBuffer.slice(12, 12 + frameSize);
-          incomingBuffer = incomingBuffer.slice(12 + frameSize);
-
-          if (isConfig) {
-            this.configBuffer = framePayload;
-            continue; // SPS/PPS parameter set cached, wait for IDR frame
-          }
-
-          // Format packet: [1-byte isKeyFlag] [Payload]
-          // If keyframe and configBuffer exists, ensure SPS/PPS is prepended for instant WebCodecs rendering
-          const payloadToSend = (isKeyFrame && this.configBuffer) 
-            ? Buffer.concat([this.configBuffer, framePayload]) 
-            : framePayload;
-
-          const packetHeader = Buffer.alloc(1);
-          packetHeader.writeUInt8(isKeyFrame ? 1 : 0, 0);
-          const fullPacket = Buffer.concat([packetHeader, payloadToSend]);
-
-          this.broadcastBinary(fullPacket);
-        }
-      });
-
-      videoSock.on('close', () => {
-        console.log('[StreamService] Video socket closed');
-        this.isRunning = false;
-        this.broadcastStatus(false);
-        if (this.onStatusChange) this.onStatusChange(false);
-      });
-
-      videoSock.on('error', (err) => {
-        console.warn('[StreamService] Video socket error:', err.message);
-      });
-
-      // 6. Connect to Control Socket (second connection for sub-millisecond touch events)
-      setTimeout(() => {
-        const ctrlSock = new net.Socket();
-        this.controlSocket = ctrlSock;
-        ctrlSock.connect(tunnelPort, '127.0.0.1', () => {
-          console.log('[StreamService] Control socket connected - sub-millisecond touch active!');
-        });
-        ctrlSock.on('error', (e) => console.warn('[StreamService] Control socket note:', e.message));
-      }, 400);
-
       return { success: true, message: 'Unified in-window stream started successfully' };
     } catch (err) {
       console.error('[StreamService] Error starting stream:', err);
@@ -320,12 +304,16 @@ class StreamService {
       try { this.controlSocket.destroy(); } catch (e) {}
       this.controlSocket = null;
     }
+    if (this.localTcpServer) {
+      try { this.localTcpServer.close(); } catch (e) {}
+      this.localTcpServer = null;
+    }
     if (this.serverProcess) {
       try { this.serverProcess.kill(); } catch (e) {}
       this.serverProcess = null;
     }
     if (this.activeDevice) {
-      adbService.runAdbCommand(['-s', this.activeDevice.serial, 'forward', '--remove', `tcp:${this.forwardPort}`]).catch(() => {});
+      adbService.runAdbCommand(['-s', this.activeDevice.serial, 'reverse', '--remove', 'localabstract:scrcpy']).catch(() => {});
     }
     this.activeDevice = null;
     this.broadcastStatus(false);
@@ -375,3 +363,4 @@ class StreamService {
 }
 
 module.exports = new StreamService();
+

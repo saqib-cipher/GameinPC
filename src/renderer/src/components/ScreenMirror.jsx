@@ -53,25 +53,30 @@ export default function ScreenMirror({
 
   // 1. Auto-Adjust Layout Engine (Calculates maximal fitting dimensions preserving native aspect ratio)
   const updateLayout = useCallback(() => {
-    if (!workspaceRef.current) return;
-    const ws = workspaceRef.current;
-    const rect = ws.getBoundingClientRect();
-    const pad = 24; // 12px padding around
+    // 1. Determine available container dimensions
+    let availW = window.innerWidth - (isEditorOpen ? 360 : 0) - 32;
+    let availH = window.innerHeight - 48 - 32;
 
-    let availW = rect.width > 50 ? (rect.width - pad) : (window.innerWidth - (isEditorOpen ? 360 : 0) - pad);
-    let availH = rect.height > 50 ? (rect.height - pad) : (window.innerHeight - 48 - pad);
+    if (workspaceRef.current) {
+      const rect = workspaceRef.current.getBoundingClientRect();
+      if (rect.width > 100) availW = rect.width - 32;
+      if (rect.height > 100) availH = rect.height - 32;
+    }
 
-    availW = Math.max(200, availW);
-    availH = Math.max(150, availH);
+    availW = Math.max(300, availW);
+    availH = Math.max(200, availH);
 
-    // Determine target aspect ratio from stream or device resolution
-    let targetRatio = 16 / 9;
+    // 2. Determine target aspect ratio: games like Free Fire run in landscape (width > height)
+    let targetRatio = 16 / 9; // ~1.777
     if (streamDim.width > 0 && streamDim.height > 0) {
       targetRatio = streamDim.width / streamDim.height;
     } else if (deviceDetails?.resolution?.width && deviceDetails?.resolution?.height) {
-      targetRatio = deviceDetails.resolution.width / deviceDetails.resolution.height;
+      const rw = deviceDetails.resolution.width;
+      const rh = deviceDetails.resolution.height;
+      targetRatio = Math.max(rw, rh) / Math.min(rw, rh);
     }
 
+    // 3. Fit maximal rectangle
     let fittedW = availW;
     let fittedH = fittedW / targetRatio;
 
@@ -85,13 +90,26 @@ export default function ScreenMirror({
       fittedH = fittedW / targetRatio;
     }
 
-    fittedW = Math.max(200, Math.round(fittedW));
-    fittedH = Math.max(120, Math.round(fittedH));
+    fittedW = Math.round(fittedW);
+    fittedH = Math.round(fittedH);
 
     setViewportSize({
       width: fittedW,
       height: fittedH,
     });
+
+    // Report bounds to backend for native mirror docking
+    if (workspaceRef.current && window.electronAPI?.updateViewportBounds) {
+      const rect = workspaceRef.current.getBoundingClientRect();
+      const offsetX = rect.left + Math.round((rect.width - fittedW) / 2);
+      const offsetY = rect.top + Math.round((rect.height - fittedH) / 2);
+      window.electronAPI.updateViewportBounds({
+        x: offsetX,
+        y: offsetY,
+        width: fittedW,
+        height: fittedH,
+      });
+    }
   }, [streamDim, deviceDetails, isEditorOpen]);
 
   useEffect(() => {
@@ -533,24 +551,26 @@ export default function ScreenMirror({
         )}
 
         {/* Performance & Aim Mode Control HUD (Bottom-Left) */}
-        <div className="perf-hud">
-          <div className="perf-pill">
-            <Activity size={12} color="var(--md-sys-color-primary)" />
-            <span className="perf-value">FPS: {fpsCount}</span>
+        {isMirrorRunning && (
+          <div className="perf-hud">
+            <div className="perf-pill">
+              <Activity size={12} color="var(--md-sys-color-primary)" />
+              <span className="perf-value">FPS: {fpsCount}</span>
+            </div>
+            <div className="perf-pill">
+              <Zap size={12} color="var(--md-sys-color-success)" />
+              <span className="perf-value">Latency: &lt;1ms</span>
+            </div>
+            <button 
+              className={`perf-pill btn-hud-aim ${isShootingMode ? 'aim-active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); handleToggleAimMode(); }}
+              title="Click or press Ctrl to toggle shooting mode"
+            >
+              {isShootingMode ? <Crosshair size={12} color="#00E5FF" /> : <MousePointer size={12} color="#FFFFFF" />}
+              <span>{isShootingMode ? '🎯 AIM LOCKED (Press Ctrl / Esc to unlock)' : '🖱️ CURSOR VISIBLE (Press Ctrl to Lock Aim)'}</span>
+            </button>
           </div>
-          <div className="perf-pill">
-            <Zap size={12} color="var(--md-sys-color-success)" />
-            <span className="perf-value">Latency: &lt;1ms</span>
-          </div>
-          <button 
-            className={`perf-pill btn-hud-aim ${isShootingMode ? 'aim-active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); handleToggleAimMode(); }}
-            title="Click or press Ctrl to toggle shooting mode"
-          >
-            {isShootingMode ? <Crosshair size={12} color="#00E5FF" /> : <MousePointer size={12} color="#FFFFFF" />}
-            <span>{isShootingMode ? '🎯 AIM LOCKED (Press Ctrl / Esc to unlock)' : '🖱️ CURSOR VISIBLE (Press Ctrl to Lock Aim)'}</span>
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );

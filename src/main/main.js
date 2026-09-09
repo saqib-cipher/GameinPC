@@ -160,7 +160,7 @@ ipcMain.handle('adb:get-foreground-app', async (event, serial) => {
   return await adbService.getForegroundApp(serial);
 });
 
-// Screen Mirroring Handlers (Unified In-Window Stream Engine)
+// Screen Mirroring Handlers (Hardware In-Window WebCodecs Engine)
 ipcMain.handle('mirror:start', async (event, { serial, settings }) => {
   const result = await streamService.startStream(serial, settings);
   if (mainWindow && !mainWindow.isDestroyed()) {

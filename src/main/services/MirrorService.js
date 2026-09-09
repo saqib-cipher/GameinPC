@@ -148,6 +148,14 @@ class MirrorService {
         if (this.onStatusChange) this.onStatusChange(false);
       });
 
+      setTimeout(() => {
+        this.dockToParent();
+      }, 500);
+
+      setTimeout(() => {
+        this.dockToParent();
+      }, 1200);
+
       return { success: true, message: 'Native Scrcpy mirror window started' };
     } catch (err) {
       console.error('Failed to launch scrcpy:', err);

@@ -408,9 +408,11 @@ export default function App() {
   );
 
   const shouldDisplayOverlay = Boolean(
-    (showOverlay && (isGameDetected || !foregroundPackage)) || 
-    isEditorOpen || 
-    isShootingMode
+    isEditorOpen || (
+      isMirrorRunning && (
+        (showOverlay && (isGameDetected || !foregroundPackage)) || isShootingMode
+      )
+    )
   );
 
   return (
