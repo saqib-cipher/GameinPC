@@ -31,6 +31,7 @@ export default function App() {
   // Mirror & Stream state
   const [isMirrorRunning, setIsMirrorRunning] = useState(false);
   const [isScreenOff, setIsScreenOff] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
 
   // Settings & Modals state
   const [settings, setSettings] = useState({
@@ -40,7 +41,7 @@ export default function App() {
     stayAwake: true,
     turnScreenOff: false,
     renderDriver: 'direct3d11',
-    audioMirror: false,
+    audioMirror: true,
     lowLatencyMode: true,
     customCrosshair: true,
     crosshairColor: '#00E5FF',
@@ -68,6 +69,8 @@ export default function App() {
             setSettings(loadedSettings);
             if (loadedSettings.keyOverlayOpacity) setOpacity(loadedSettings.keyOverlayOpacity);
             if (loadedSettings.keyOverlayScale) setScale(loadedSettings.keyOverlayScale);
+            if (loadedSettings.audioMirror !== undefined) setIsAudioEnabled(loadedSettings.audioMirror);
+            if (loadedSettings.turnScreenOff !== undefined) setIsScreenOff(loadedSettings.turnScreenOff);
           }
 
           // Listen for mirror status changes
@@ -370,6 +373,7 @@ export default function App() {
         settings: {
           ...settings,
           turnScreenOff: isScreenOff,
+          audioMirror: isAudioEnabled,
         }
       });
       if (res.success) {
@@ -378,15 +382,35 @@ export default function App() {
     }
   };
 
-  const handleToggleScreenOff = () => {
-    setIsScreenOff(!isScreenOff);
+  const handleToggleScreenOff = async () => {
+    const next = !isScreenOff;
+    setIsScreenOff(next);
+    if (window.electronAPI?.setScreenOff) {
+      await window.electronAPI.setScreenOff(next);
+    }
+  };
+
+  const handleToggleAudio = async () => {
+    const next = !isAudioEnabled;
+    setIsAudioEnabled(next);
+    if (window.electronAPI?.setAudioEnabled) {
+      await window.electronAPI.setAudioEnabled(next);
+    }
   };
 
   // 6. Settings Save
   const handleSaveSettings = (newSettings) => {
     setSettings(newSettings);
+    if (newSettings.turnScreenOff !== undefined) setIsScreenOff(newSettings.turnScreenOff);
+    if (newSettings.audioMirror !== undefined) setIsAudioEnabled(newSettings.audioMirror);
     if (window.electronAPI) {
       window.electronAPI.saveSettings(newSettings);
+      if (window.electronAPI.setScreenOff && isMirrorRunning) {
+        window.electronAPI.setScreenOff(newSettings.turnScreenOff);
+      }
+      if (window.electronAPI.setAudioEnabled && isMirrorRunning) {
+        window.electronAPI.setAudioEnabled(newSettings.audioMirror);
+      }
     }
   };
 
@@ -439,6 +463,8 @@ export default function App() {
         onToggleMirror={handleToggleMirror}
         isScreenOff={isScreenOff}
         onToggleScreenOff={handleToggleScreenOff}
+        isAudioEnabled={isAudioEnabled}
+        onToggleAudio={handleToggleAudio}
         showOverlay={showOverlay}
         onToggleOverlay={() => setShowOverlay(!showOverlay)}
         isEditorOpen={isEditorOpen}

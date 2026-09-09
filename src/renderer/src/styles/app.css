@@ -2150,3 +2150,75 @@
   width: 50%;
   text-align: center;
 }
+
+/* ================= IN-WINDOW MIRROR PERF HUD (FPS, Audio, Screen Off, Aim) ================= */
+.perf-hud {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.perf-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 17, 23, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  user-select: none;
+}
+
+.perf-pill.clickable {
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.perf-pill.clickable:hover {
+  border-color: var(--md-sys-color-primary);
+  transform: translateY(-1px);
+}
+
+.perf-pill.audio-on {
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.perf-pill.audio-off {
+  border-color: rgba(255, 82, 82, 0.4);
+  color: #FF5252;
+}
+
+.perf-pill.screen-off-pill {
+  border-color: rgba(255, 82, 82, 0.6);
+  background: rgba(255, 82, 82, 0.15);
+  color: #FF5252;
+  animation: pulse 2s infinite;
+}
+
+.btn-hud-aim {
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-hud-aim:hover {
+  border-color: var(--md-sys-color-primary);
+}
+
+.btn-hud-aim.aim-active {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: #00E5FF;
+  color: #00E5FF;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
+}

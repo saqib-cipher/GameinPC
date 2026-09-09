@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getMirrorStatus: () => ipcRenderer.invoke('mirror:get-status'),
   injectTouch: (data) => ipcRenderer.invoke('mirror:inject-touch', data),
   updateViewportBounds: (bounds) => ipcRenderer.invoke('mirror:update-bounds', bounds),
+  setScreenOff: (isOff) => ipcRenderer.invoke('mirror:set-screen-off', isOff),
+  setAudioEnabled: (enabled) => ipcRenderer.invoke('mirror:set-audio', enabled),
   onMirrorStatusChanged: (callback) => {
     ipcRenderer.on('mirror:status-changed', (event, isRunning) => callback(isRunning));
   },

@@ -13,7 +13,10 @@ import {
   EyeOff, 
   Sliders, 
   Play, 
-  Square 
+  Square,
+  Volume2,
+  VolumeX,
+  MonitorOff
 } from 'lucide-react';
 
 export default function TopBar({
@@ -35,6 +38,8 @@ export default function TopBar({
   onToggleMirror,
   isScreenOff,
   onToggleScreenOff,
+  isAudioEnabled,
+  onToggleAudio,
   showOverlay,
   onToggleOverlay,
   isEditorOpen,
@@ -178,6 +183,28 @@ export default function TopBar({
           >
             {isMirrorRunning ? <Square size={14} /> : <Play size={14} />}
             <span>{isMirrorRunning ? 'Stop Mirror' : 'Start Mirror'}</span>
+          </button>
+
+          {/* Turn Mobile Screen Off/On */}
+          <button 
+            className={`btn-icon ${isScreenOff ? 'active-glow' : ''}`}
+            onClick={onToggleScreenOff}
+            title={isScreenOff ? "Mobile Screen is OFF (Click to Turn ON)" : "Turn Mobile Screen OFF (Saves Battery & Heat)"}
+          >
+            <MonitorOff size={16} color={isScreenOff ? "var(--md-sys-color-primary)" : "currentColor"} />
+          </button>
+
+          {/* PC Game Audio Toggle */}
+          <button 
+            className={`btn-icon ${isAudioEnabled !== false ? 'active-glow' : ''}`}
+            onClick={onToggleAudio}
+            title={isAudioEnabled !== false ? "Game Sound Active on PC (Click to Mute)" : "Game Sound Muted (Click to Forward to PC)"}
+          >
+            {isAudioEnabled !== false ? (
+              <Volume2 size={16} color="var(--md-sys-color-primary)" />
+            ) : (
+              <VolumeX size={16} color="var(--md-sys-color-error)" />
+            )}
           </button>
 
           {/* Key Overlay Visibility Toggle */}

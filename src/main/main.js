@@ -194,6 +194,14 @@ ipcMain.handle('mirror:update-bounds', (event, bounds) => {
   return true;
 });
 
+ipcMain.handle('mirror:set-screen-off', async (event, isOff) => {
+  return streamService.setScreenPowerMode(isOff);
+});
+
+ipcMain.handle('mirror:set-audio', async (event, enabled) => {
+  return streamService.setAudioEnabled(enabled);
+});
+
 // Keymapping & Config Handlers
 ipcMain.handle('config:load-schemes', async () => {
   return configService.loadSchemes();

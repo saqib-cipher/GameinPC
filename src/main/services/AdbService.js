@@ -303,6 +303,25 @@ class AdbService {
     const escaped = text.replace(/ /g, '%s');
     return this.runAdbCommand(['-s', serial, 'shell', 'input', 'text', escaped]);
   }
+
+  async setScreenPowerMode(serial, isOff = true) {
+    if (!serial && this.currentDevice) serial = this.currentDevice.serial;
+    if (!serial) return false;
+
+    try {
+      if (isOff) {
+        // Keep phone awake while plugged in so it keeps running game
+        await this.runAdbCommand(['-s', serial, 'shell', 'svc', 'power', 'stayon', 'true']).catch(() => {});
+      } else {
+        // Wake up screen & unlock
+        await this.runAdbCommand(['-s', serial, 'shell', 'input', 'keyevent', '224']).catch(() => {}); // WAKEUP
+        await this.runAdbCommand(['-s', serial, 'shell', 'input', 'keyevent', '82']).catch(() => {});  // UNLOCK
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 }
 
 module.exports = new AdbService();

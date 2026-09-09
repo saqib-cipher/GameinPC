@@ -13,6 +13,7 @@ class StreamService {
     this.connectedClients = new Set();
     this.activeDevice = null;
     this.serverProcess = null;
+    this.audioProcess = null;
     this.localTcpServer = null;
     this.videoSocket = null;
     this.controlSocket = null;
@@ -24,12 +25,34 @@ class StreamService {
     this.configBuffer = null; // Cached SPS / PPS for instant client start
     this.onStatusChange = null;
 
+    this.isScreenOff = false;
+    this.isAudioEnabled = true;
+
     this.initWebSocketServer();
+  }
+
+  resolveScrcpyPath() {
+    if (process.resourcesPath) {
+      const packagedScrcpy = path.join(process.resourcesPath, 'bin', 'scrcpy.exe');
+      if (fs.existsSync(packagedScrcpy)) return packagedScrcpy;
+    }
+    const bundled = path.resolve(__dirname, '../../../bin/scrcpy.exe');
+    if (fs.existsSync(bundled)) {
+      return bundled;
+    }
+    return 'scrcpy';
   }
 
   initWebSocketServer() {
     try {
       this.wss = new WebSocket.Server({ port: this.wsPort });
+      this.wss.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          console.warn(`[StreamService] WebSocket port ${this.wsPort} already in use`);
+        } else {
+          console.error('[StreamService] WebSocket error:', err);
+        }
+      });
       console.log(`[StreamService] WebSocket server listening on ws://127.0.0.1:${this.wsPort}`);
 
       this.wss.on('connection', (ws) => {
@@ -52,6 +75,8 @@ class StreamService {
           width: this.deviceWidth,
           height: this.deviceHeight,
           codec: this.codec,
+          isScreenOff: this.isScreenOff,
+          isAudioEnabled: this.isAudioEnabled,
         }));
 
         // If we have cached SPS/PPS config header, send it immediately as keyframe
@@ -123,13 +148,116 @@ class StreamService {
     }
   }
 
+  // Control Mobile Screen Power Mode (0 = OFF, 2 = NORMAL)
+  setScreenPowerMode(isOff = true) {
+    this.isScreenOff = isOff;
+    console.log(`[StreamService] Changing mobile screen power mode: ${isOff ? 'OFF' : 'NORMAL'}`);
+
+    if (this.controlSocket && !this.controlSocket.destroyed) {
+      try {
+        const buf = Buffer.alloc(2);
+        buf.writeUInt8(10, 0); // CONTROL_MSG_TYPE_SET_SCREEN_POWER_MODE = 10
+        buf.writeUInt8(isOff ? 0 : 2, 1); // 0 = OFF, 2 = NORMAL
+        this.controlSocket.write(buf);
+      } catch (e) {
+        console.warn('[StreamService] Failed to send screen power socket message:', e);
+      }
+    }
+
+    // Also apply ADB stay-awake power setting
+    if (this.activeDevice?.serial) {
+      adbService.setScreenPowerMode(this.activeDevice.serial, isOff).catch(() => {});
+    }
+
+    this.broadcastStatus(this.isRunning);
+    return { success: true, isScreenOff: this.isScreenOff };
+  }
+
+  // Start Real-time Game Audio Forwarding from Android to PC Speakers / Headset
+  startAudioForwarding(serial) {
+    this.stopAudioForwarding();
+
+    const scrcpy = this.resolveScrcpyPath();
+    const binDir = path.dirname(scrcpy);
+    const audioArgs = [
+      '-s', serial,
+      '--no-video',
+      '--no-control',
+      '--audio-codec=opus',
+      '--audio-buffer=20',
+      '--audio-output-buffer=10',
+      '--window-title=GameinPC-AudioForwarder'
+    ];
+
+    console.log(`[StreamService] Starting native game audio forwarding: ${scrcpy} ${audioArgs.join(' ')}`);
+
+    try {
+      this.audioProcess = spawn(scrcpy, audioArgs, {
+        cwd: binDir,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          PATH: `${binDir};${process.env.PATH}`,
+          ADB: path.join(binDir, 'adb.exe')
+        }
+      });
+
+      this.audioProcess.stdout.on('data', d => {
+        const line = d.toString().trim();
+        if (line) console.log(`[scrcpy-audio]: ${line}`);
+      });
+
+      this.audioProcess.stderr.on('data', d => {
+        const line = d.toString().trim();
+        if (line && !line.includes('10013')) console.warn(`[scrcpy-audio note]: ${line}`);
+      });
+
+      this.audioProcess.on('close', code => {
+        console.log(`[StreamService] Audio forwarder exited with code ${code}`);
+        this.audioProcess = null;
+      });
+
+      this.isAudioEnabled = true;
+      return true;
+    } catch (err) {
+      console.error('[StreamService] Failed to start audio forwarder:', err);
+      this.audioProcess = null;
+      return false;
+    }
+  }
+
+  stopAudioForwarding() {
+    if (this.audioProcess) {
+      try {
+        this.audioProcess.kill();
+      } catch (e) {}
+      this.audioProcess = null;
+    }
+  }
+
+  setAudioEnabled(enabled = true) {
+    this.isAudioEnabled = enabled;
+    if (enabled) {
+      if (this.isRunning && this.activeDevice?.serial && !this.audioProcess) {
+        this.startAudioForwarding(this.activeDevice.serial);
+      }
+    } else {
+      this.stopAudioForwarding();
+    }
+    this.broadcastStatus(this.isRunning);
+    return { success: true, isAudioEnabled: this.isAudioEnabled };
+  }
+
   async startStream(serial, settings = {}) {
     if (this.isRunning) {
       await this.stopStream();
     }
 
     this.activeDevice = { serial };
-    console.log(`[StreamService] Starting unified in-window stream for device ${serial}...`);
+    this.isScreenOff = !!settings.turnScreenOff;
+    this.isAudioEnabled = settings.audioMirror !== false; // Audio enabled by default
+
+    console.log(`[StreamService] Starting unified in-window stream for device ${serial} (Audio=${this.isAudioEnabled}, ScreenOff=${this.isScreenOff})...`);
 
     try {
       const adb = adbService.resolveAdbPath();
@@ -241,6 +369,14 @@ class StreamService {
         } else if (!this.controlSocket) {
           this.controlSocket = socket;
           console.log('[StreamService] Control socket connected - sub-millisecond touch active!');
+
+          // If turnScreenOff was requested on startup, turn mobile screen off now
+          if (this.isScreenOff) {
+            setTimeout(() => {
+              this.setScreenPowerMode(true);
+            }, 300);
+          }
+
           socket.on('close', () => {
             this.controlSocket = null;
           });
@@ -248,7 +384,7 @@ class StreamService {
         }
       });
 
-      // 4. Launch scrcpy-server with send_frame_meta=true
+      // 4. Launch scrcpy-server with send_frame_meta=true & stay_awake=true
       const bitrate = (settings.bitrate || 16) * 1000000;
       const maxFps = settings.maxFps || 120;
       const maxSize = settings.maxSize || 1920;
@@ -264,9 +400,10 @@ class StreamService {
         `video_bit_rate=${bitrate}`,
         `max_fps=${maxFps}`,
         `max_size=${maxSize}`,
-        'audio=false',
+        'audio=false', // Video stream socket handles video; dedicated background scrcpy process handles crystal-clear PC audio
         'control=true',
         'cleanup=true',
+        'stay_awake=true',
         'send_device_meta=false',
         'send_frame_meta=true',
         'send_dummy_byte=false',
@@ -284,6 +421,11 @@ class StreamService {
         console.warn(`[scrcpy-server err]: ${d.toString().trim()}`);
       });
 
+      // 5. Start real-time game audio forwarding to PC speakers / headset
+      if (this.isAudioEnabled) {
+        this.startAudioForwarding(serial);
+      }
+
       return { success: true, message: 'Unified in-window stream started successfully' };
     } catch (err) {
       console.error('[StreamService] Error starting stream:', err);
@@ -296,6 +438,15 @@ class StreamService {
   stopStream() {
     this.isRunning = false;
     this.configBuffer = null;
+
+    // Turn screen back ON when stream stops
+    if (this.isScreenOff) {
+      this.setScreenPowerMode(false);
+      this.isScreenOff = false;
+    }
+
+    this.stopAudioForwarding();
+
     if (this.videoSocket) {
       try { this.videoSocket.destroy(); } catch (e) {}
       this.videoSocket = null;
@@ -337,6 +488,8 @@ class StreamService {
       width: this.deviceWidth,
       height: this.deviceHeight,
       codec: this.codec,
+      isScreenOff: this.isScreenOff,
+      isAudioEnabled: this.isAudioEnabled,
     });
     for (const client of this.connectedClients) {
       if (client.readyState === WebSocket.OPEN) {
@@ -353,6 +506,8 @@ class StreamService {
       width: this.deviceWidth,
       height: this.deviceHeight,
       codec: this.codec,
+      isScreenOff: this.isScreenOff,
+      isAudioEnabled: this.isAudioEnabled,
     });
     for (const client of this.connectedClients) {
       if (client.readyState === WebSocket.OPEN) {
@@ -363,4 +518,3 @@ class StreamService {
 }
 
 module.exports = new StreamService();
-

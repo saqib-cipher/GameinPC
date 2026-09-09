@@ -642,8 +642,8 @@ class ConfigService {
       maxSize: 0, // 0 = native (1080p/2k)
       stayAwake: true,
       turnScreenOff: false,
-      renderDriver: 'auto',
-      audioMirror: false,
+      renderDriver: 'direct3d11',
+      audioMirror: true, // Enable PC game audio forwarding by default
       lowLatencyMode: true,
       showFpsOverlay: true,
       keyOverlayOpacity: 85,

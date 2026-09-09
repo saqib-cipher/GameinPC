@@ -10,7 +10,10 @@ import {
   Download, 
   Activity,
   MousePointer,
-  Maximize2
+  Maximize2,
+  Volume2,
+  VolumeX,
+  MonitorOff
 } from 'lucide-react';
 import KeyOverlay from './KeyOverlay';
 
@@ -34,6 +37,10 @@ export default function ScreenMirror({
   showOverlay,
   isShootingMode,
   onToggleShootingMode,
+  isScreenOff,
+  onToggleScreenOff,
+  isAudioEnabled,
+  onToggleAudio,
   settings,
   foregroundPackage,
   isGameDetected,
@@ -554,7 +561,7 @@ export default function ScreenMirror({
           />
         )}
 
-        {/* Performance & Aim Mode Control HUD (Bottom-Left) */}
+        {/* Performance, Audio & Aim Mode Control HUD (Bottom-Left) */}
         {isMirrorRunning && (
           <div className="perf-hud">
             <div className="perf-pill">
@@ -565,6 +572,24 @@ export default function ScreenMirror({
               <Zap size={12} color="var(--md-sys-color-success)" />
               <span className="perf-value">Latency: &lt;1ms</span>
             </div>
+            <div 
+              className={`perf-pill clickable ${isAudioEnabled !== false ? 'audio-on' : 'audio-off'}`}
+              onClick={(e) => { e.stopPropagation(); onToggleAudio && onToggleAudio(); }}
+              title="Click to toggle PC game audio"
+            >
+              {isAudioEnabled !== false ? <Volume2 size={12} color="var(--md-sys-color-primary)" /> : <VolumeX size={12} color="var(--md-sys-color-error)" />}
+              <span className="perf-value">{isAudioEnabled !== false ? 'Sound: PC' : 'Muted'}</span>
+            </div>
+            {isScreenOff && (
+              <div 
+                className="perf-pill screen-off-pill clickable"
+                onClick={(e) => { e.stopPropagation(); onToggleScreenOff && onToggleScreenOff(); }}
+                title="Mobile screen is powered off to save battery & heat. Click to wake up."
+              >
+                <MonitorOff size={12} color="#FF5252" />
+                <span className="perf-value">Phone Screen: OFF</span>
+              </div>
+            )}
             <button 
               className={`perf-pill btn-hud-aim ${isShootingMode ? 'aim-active' : ''}`}
               onClick={(e) => { e.stopPropagation(); handleToggleAimMode(); }}
