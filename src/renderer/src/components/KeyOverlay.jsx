@@ -7,6 +7,8 @@ export default function KeyOverlay({
   selectedControlId,
   onSelectControl,
   onUpdateControlPosition,
+  onUpdateControl,
+  onOpenPanSettings,
   opacity = 85,
   scale = 100,
   activeKeys = new Set(),
@@ -47,7 +49,14 @@ export default function KeyOverlay({
     percentX = Math.max(1, Math.min(99, percentX));
     percentY = Math.max(1, Math.min(99, percentY));
 
-    onUpdateControlPosition(draggingId, percentX, percentY);
+    if (draggingId.startsWith('fire_')) {
+      const parentId = draggingId.replace('fire_', '');
+      if (onUpdateControl) {
+        onUpdateControl(parentId, { lButtonX: percentX, lButtonY: percentY });
+      }
+    } else {
+      onUpdateControlPosition(draggingId, percentX, percentY);
+    }
   };
 
   const handleMouseUp = () => {
@@ -114,9 +123,33 @@ export default function KeyOverlay({
 
         // Render Pan (Aim, Pan & Shoot)
         if (ctrl.type === 'Pan') {
+          const sensX = typeof ctrl.mouseSensitivityX === 'number' 
+            ? ctrl.mouseSensitivityX 
+            : (typeof ctrl.sensitivity === 'number' ? ctrl.sensitivity : 1.60);
+
+          const sensY = typeof ctrl.mouseSensitivityY === 'number' 
+            ? ctrl.mouseSensitivityY 
+            : (typeof ctrl.sensitivityRatioY === 'number' ? ctrl.sensitivityRatioY : 1.60);
+
+          const handleStepX = (e, delta) => {
+            e.stopPropagation();
+            const newVal = Math.max(0.1, Math.min(20.0, parseFloat((sensX + delta).toFixed(2))));
+            if (onUpdateControl) {
+              onUpdateControl(ctrl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
+            }
+          };
+
+          const handleStepY = (e, delta) => {
+            e.stopPropagation();
+            const newVal = Math.max(0.1, Math.min(20.0, parseFloat((sensY + delta).toFixed(2))));
+            if (onUpdateControl) {
+              onUpdateControl(ctrl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
+            }
+          };
+
           return (
             <React.Fragment key={ctrl.id}>
-              {/* Pan Reticle / Toggle Key Indicator */}
+              {/* Pan Reticle / Toggle Key Indicator (Matching Screenshot 1 & 2) */}
               <div
                 className={`overlay-pan ${isSelected ? 'selected' : ''} ${isEditorOpen ? 'draggable' : ''}`}
                 style={{
@@ -125,25 +158,96 @@ export default function KeyOverlay({
                   transform: `translate(-50%, -50%) scale(${scale / 100})`,
                 }}
                 onMouseDown={(e) => handleMouseDown(e, ctrl)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (onOpenPanSettings) onOpenPanSettings(ctrl);
+                }}
               >
-                <div className="pan-pill">
-                  <span className="sens-label">X {(ctrl.sensitivity || 1.0).toFixed(2)}</span>
-                  <div className={`pan-key ${isKeyActive(ctrl.keyStartStop) ? 'active' : ''}`}>
-                    {ctrl.keyStartStop || 'Ctrl'}
+                <div className="pan-pill-advanced">
+                  {/* X Sensitivity Stepper */}
+                  <div className="sens-stepper-col">
+                    <span className="sens-axis-label">X</span>
+                    {isEditorOpen ? (
+                      <div className="sens-mini-controls">
+                        <button className="btn-sens-step" onClick={(e) => handleStepX(e, -0.05)} title="Decrease X sensitivity">&lt;</button>
+                        <span className="sens-val-text">{sensX.toFixed(2)}</span>
+                        <button className="btn-sens-step" onClick={(e) => handleStepX(e, 0.05)} title="Increase X sensitivity">&gt;</button>
+                      </div>
+                    ) : (
+                      <span className="sens-val-text">{sensX.toFixed(2)}</span>
+                    )}
                   </div>
-                  <span className="sens-label">{(ctrl.sensitivityRatioY || 1.0).toFixed(2)} Y</span>
+
+                  {/* Central Key Button (Red Ring matching screenshot) */}
+                  <div 
+                    className={`pan-key-badge ${isKeyActive(ctrl.keyStartStop) ? 'active' : ''}`}
+                    onClick={(e) => {
+                      if (isEditorOpen && onOpenPanSettings) {
+                        e.stopPropagation();
+                        onOpenPanSettings(ctrl);
+                      }
+                    }}
+                    title="Click or press Ctrl to toggle Aim mode (Settings in editor)"
+                  >
+                    <div className="pan-red-ring">
+                      <span className="pan-key-text">{ctrl.keyStartStop || 'Ctrl'}</span>
+                    </div>
+                  </div>
+
+                  {/* Y Sensitivity Stepper */}
+                  <div className="sens-stepper-col">
+                    {isEditorOpen ? (
+                      <div className="sens-mini-controls">
+                        <button className="btn-sens-step" onClick={(e) => handleStepY(e, -0.05)} title="Decrease Y sensitivity">&lt;</button>
+                        <span className="sens-val-text">{sensY.toFixed(2)}</span>
+                        <button className="btn-sens-step" onClick={(e) => handleStepY(e, 0.05)} title="Increase Y sensitivity">&gt;</button>
+                      </div>
+                    ) : (
+                      <span className="sens-val-text">{sensY.toFixed(2)}</span>
+                    )}
+                    <span className="sens-axis-label">Y</span>
+                  </div>
+
+                  {/* Gear Settings Button in Editor */}
+                  {isEditorOpen && (
+                    <button 
+                      className="btn-pan-gear" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onOpenPanSettings) onOpenPanSettings(ctrl);
+                      }}
+                      title="Aim, Pan & Shoot Advanced Settings"
+                    >
+                      ⚙️
+                    </button>
+                  )}
                 </div>
-                {isEditorOpen && <span className="ctrl-tag">Aim & Pan</span>}
+                {isEditorOpen && <span className="ctrl-tag">Aim &amp; Pan</span>}
               </div>
 
               {/* Fire Button (LButton) if enabled */}
               {ctrl.isShootOnClickEnabled && (
                 <div
-                  className="overlay-lbutton"
+                  className={`overlay-lbutton ${isEditorOpen ? 'draggable' : ''}`}
                   style={{
-                    left: `${ctrl.lButtonX || 80}%`,
-                    top: `${ctrl.lButtonY || 70}%`,
+                    left: `${ctrl.lButtonX !== undefined ? ctrl.lButtonX : 84.94}%`,
+                    top: `${ctrl.lButtonY !== undefined ? ctrl.lButtonY : 73.44}%`,
                     transform: `translate(-50%, -50%) scale(${scale / 100})`,
+                  }}
+                  onMouseDown={(e) => {
+                    if (isEditorOpen) {
+                      e.stopPropagation();
+                      // Drag fire button position
+                      setDraggingId('fire_' + ctrl.id);
+                      const rect = containerRef.current.getBoundingClientRect();
+                      const curX = ((ctrl.lButtonX || 84.94) / 100) * rect.width;
+                      const curY = ((ctrl.lButtonY || 73.44) / 100) * rect.height;
+                      setDragOffset({
+                        x: e.clientX - (rect.left + curX),
+                        y: e.clientY - (rect.top + curY),
+                      });
+                    }
                   }}
                   title="Fire weapon / Left Click"
                 >

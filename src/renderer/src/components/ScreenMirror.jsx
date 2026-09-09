@@ -27,6 +27,8 @@ export default function ScreenMirror({
   selectedControlId,
   onSelectControl,
   onUpdateControlPosition,
+  onUpdateControl,
+  onOpenPanSettings,
   opacity,
   scale,
   showOverlay,
@@ -544,6 +546,8 @@ export default function ScreenMirror({
             selectedControlId={selectedControlId}
             onSelectControl={onSelectControl}
             onUpdateControlPosition={onUpdateControlPosition}
+            onUpdateControl={onUpdateControl}
+            onOpenPanSettings={onOpenPanSettings}
             opacity={opacity}
             scale={scale}
             activeKeys={activeKeys}

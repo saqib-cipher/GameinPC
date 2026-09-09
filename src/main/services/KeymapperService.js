@@ -257,23 +257,48 @@ class KeymapperService {
     const panControl = this.activeScheme.gameControls.find(c => c.type === 'Pan');
     if (!panControl) return;
 
-    const sensX = (panControl.sensitivity || 1.0) * 0.12;
-    const sensY = (panControl.sensitivity || 1.0) * (panControl.sensitivityRatioY || 1.0) * 0.12;
+    // Independent X and Y sensitivity (default 1.60 matching BlueStacks / MSI App Player)
+    const rawSensX = typeof panControl.mouseSensitivityX === 'number' 
+      ? panControl.mouseSensitivityX 
+      : (typeof panControl.sensitivity === 'number' ? panControl.sensitivity : 1.60);
 
-    const deltaX = movementX * sensX;
-    const deltaY = movementY * sensY;
+    const rawSensY = typeof panControl.mouseSensitivityY === 'number' 
+      ? panControl.mouseSensitivityY 
+      : (typeof panControl.sensitivityRatioY === 'number' ? panControl.sensitivityRatioY : rawSensX);
+
+    // Base multiplier tuned for 1:1 mouse translation in Android 3D camera
+    const baseMultiplier = 0.075;
+
+    let accelFactor = 1.0;
+    if (panControl.mouseAcceleration) {
+      const mouseSpeed = Math.hypot(movementX, movementY);
+      accelFactor = Math.min(2.5, 1.0 + mouseSpeed * 0.02);
+    }
+
+    const deltaX = movementX * rawSensX * baseMultiplier * accelFactor;
+    const deltaY = movementY * rawSensY * baseMultiplier * accelFactor;
 
     this.panCurrentX += deltaX;
     this.panCurrentY += deltaY;
 
-    // Check if we exceed the swipe reset threshold
+    // Boundary check with wide pan radius (38%) to avoid frequent resets
     const distFromCenter = Math.hypot(this.panCurrentX - this.panCenter.x, this.panCurrentY - this.panCenter.y);
-    if (distFromCenter > this.panRadius) {
-      // Release touch and instantly reposition at center
+    const maxRadius = panControl.panRadius || 38.0;
+
+    const isOutOfBounds = 
+      this.panCurrentX < 4.0 || 
+      this.panCurrentX > 96.0 || 
+      this.panCurrentY < 4.0 || 
+      this.panCurrentY > 96.0 || 
+      distFromCenter > maxRadius;
+
+    if (isOutOfBounds) {
+      // Instant seamless micro-reset: UP at current position, then immediate DOWN & MOVE at center
       this.sendTouchEvent(2, 2, this.panCurrentX, this.panCurrentY);
       this.panCurrentX = this.panCenter.x;
       this.panCurrentY = this.panCenter.y;
       this.sendTouchEvent(2, 0, this.panCurrentX, this.panCurrentY);
+      this.sendTouchEvent(2, 1, this.panCurrentX + deltaX * 0.5, this.panCurrentY + deltaY * 0.5);
     } else {
       // Smooth continuous look-around drag
       this.sendTouchEvent(2, 1, this.panCurrentX, this.panCurrentY);

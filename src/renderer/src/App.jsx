@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import TopBar from './components/TopBar';
 import ScreenMirror from './components/ScreenMirror';
 import ControlsEditor from './components/ControlsEditor';
+import PanSettingsModal from './components/PanSettingsModal';
 import WirelessDebugModal from './components/WirelessDebugModal';
 import SettingsModal from './components/SettingsModal';
 import './styles/theme.css';
@@ -22,6 +23,7 @@ export default function App() {
   const [activeSchemeId, setActiveSchemeId] = useState(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [selectedControlId, setSelectedControlId] = useState(null);
+  const [panSettingsControl, setPanSettingsControl] = useState(null);
   const [showOverlay, setShowOverlay] = useState(true);
   const [opacity, setOpacity] = useState(85);
   const [scale, setScale] = useState(100);
@@ -467,6 +469,8 @@ export default function App() {
           selectedControlId={selectedControlId}
           onSelectControl={setSelectedControlId}
           onUpdateControlPosition={handleUpdateControlPosition}
+          onUpdateControl={handleUpdateControl}
+          onOpenPanSettings={(ctrl) => setPanSettingsControl(ctrl)}
           opacity={opacity}
           scale={scale}
           showOverlay={shouldDisplayOverlay}
@@ -482,10 +486,18 @@ export default function App() {
           isGameDetected={isGameDetected}
         />
 
-        {/* Controls Editor Sidebar (Matching Screenshot) */}
+        {/* Controls Editor Sidebar (Matching Screenshot 2) */}
         <ControlsEditor
           isOpen={isEditorOpen}
           onClose={() => setIsEditorOpen(false)}
+          schemes={schemes}
+          activeSchemeId={activeSchemeId}
+          onSelectScheme={handleSelectScheme}
+          onCloneScheme={handleCloneScheme}
+          onDeleteScheme={handleDeleteScheme}
+          onImportCfg={handleImportCfg}
+          onExportCfg={handleExportCfg}
+          onNewScheme={handleNewScheme}
           scheme={activeScheme}
           selectedControlId={selectedControlId}
           onSelectControl={setSelectedControlId}
@@ -503,8 +515,26 @@ export default function App() {
           onCaptureSnapshot={handleCaptureSnapshot}
           onClearSnapshot={() => setSnapshotUrl(null)}
           onUploadSnapshot={(url) => setSnapshotUrl(url)}
+          onOpenPanSettings={(ctrl) => setPanSettingsControl(ctrl)}
         />
       </div>
+
+      {/* Advanced Aim, Pan & Shoot Settings Modal (Matching Screenshot 3) */}
+      <PanSettingsModal
+        isOpen={Boolean(panSettingsControl)}
+        onClose={() => setPanSettingsControl(null)}
+        panControl={panSettingsControl}
+        onUpdatePanControl={(fields) => {
+          if (panSettingsControl) {
+            handleUpdateControl(panSettingsControl.id, fields);
+            setPanSettingsControl(prev => ({ ...prev, ...fields }));
+          }
+        }}
+        onDeletePanControl={(id) => {
+          handleDeleteControl(id);
+          setPanSettingsControl(null);
+        }}
+      />
 
       {/* Modals */}
       <WirelessDebugModal

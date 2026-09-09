@@ -121,19 +121,26 @@ class ConfigService {
             control.keyStartStop_alt1 = gc.KeyStartStop_alt1 || '';
             control.keySuspend = gc.KeySuspend || 'X';
             control.keyAction = gc.KeyAction || 'MouseLButton';
-            control.lButtonX = typeof gc.LButtonX === 'number' ? gc.LButtonX : 80;
-            control.lButtonY = typeof gc.LButtonY === 'number' ? gc.LButtonY : 70;
-            control.sensitivity = typeof gc.Sensitivity === 'number' ? gc.Sensitivity : 1.0;
-            control.sensitivityRatioY = typeof gc.SensitivityRatioY === 'number' ? gc.SensitivityRatioY : 1.0;
+            control.lButtonX = typeof gc.LButtonX === 'number' ? gc.LButtonX : 84.94;
+            control.lButtonY = typeof gc.LButtonY === 'number' ? gc.LButtonY : 73.44;
+            control.mouseSensitivityX = typeof gc.Sensitivity === 'number' ? gc.Sensitivity : 1.60;
+            control.mouseSensitivityY = typeof gc.SensitivityRatioY === 'number' ? gc.SensitivityRatioY : 1.60;
+            control.sensitivity = control.mouseSensitivityX;
+            control.sensitivityRatioY = control.mouseSensitivityY;
             control.mouseAcceleration = !!gc.MouseAcceleration;
             control.isLookAroundEnabled = gc.IsLookAroundEnabled !== false;
             control.isShootOnClickEnabled = gc.IsShootOnClickEnabled !== false;
             control.isCrosshairEnabled = gc.IsCrosshairEnabled !== false;
             control.crosshairX = typeof gc.CrosshairX === 'number' ? gc.CrosshairX : 50;
             control.crosshairY = typeof gc.CrosshairY === 'number' ? gc.CrosshairY : 50;
+            control.crosshairType = gc.CrosshairType || 'Cross';
             control.crosshairSize = gc.CrosshairSize || 1.0;
-            control.crosshairColor = gc.CrosshairColor || '#00E5FF';
-            control.tweaks = gc.Tweaks || 0;
+            control.crosshairOpacity = gc.CrosshairOpacity || 100;
+            control.crosshairColor = gc.CrosshairColor || '#FFFFFF';
+            control.tweaks = gc.Tweaks !== undefined ? gc.Tweaks.toString() : '948816450';
+            control.lookAroundX = gc.LookAroundX !== undefined ? gc.LookAroundX : -1;
+            control.lookAroundY = gc.LookAroundY !== undefined ? gc.LookAroundY : -1;
+            control.keyLookAround = gc.KeyLookAround || 'Alt';
             break;
 
           case 'Dpad':
