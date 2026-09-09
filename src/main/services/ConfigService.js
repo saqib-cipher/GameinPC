@@ -123,10 +123,11 @@ class ConfigService {
             control.keyAction = gc.KeyAction || 'MouseLButton';
             control.lButtonX = typeof gc.LButtonX === 'number' ? gc.LButtonX : 84.94;
             control.lButtonY = typeof gc.LButtonY === 'number' ? gc.LButtonY : 73.44;
-            control.mouseSensitivityX = typeof gc.Sensitivity === 'number' ? gc.Sensitivity : 1.60;
-            control.mouseSensitivityY = typeof gc.SensitivityRatioY === 'number' ? gc.SensitivityRatioY : 1.60;
+            control.mouseSensitivityX = typeof gc.MouseSensitivityX === 'number' ? gc.MouseSensitivityX : (typeof gc.Sensitivity === 'number' ? gc.Sensitivity : 1.60);
+            control.mouseSensitivityY = typeof gc.MouseSensitivityY === 'number' ? gc.MouseSensitivityY : (typeof gc.SensitivityRatioY === 'number' ? gc.SensitivityRatioY : 1.60);
             control.sensitivity = control.mouseSensitivityX;
             control.sensitivityRatioY = control.mouseSensitivityY;
+            control.sensScale = typeof gc.SensScale === 'number' ? gc.SensScale : (typeof gc.sensScale === 'number' ? gc.sensScale : 1.0);
             control.mouseAcceleration = !!gc.MouseAcceleration;
             control.isLookAroundEnabled = gc.IsLookAroundEnabled !== false;
             control.isShootOnClickEnabled = gc.IsShootOnClickEnabled !== false;
@@ -141,6 +142,12 @@ class ConfigService {
             control.lookAroundX = gc.LookAroundX !== undefined ? gc.LookAroundX : -1;
             control.lookAroundY = gc.LookAroundY !== undefined ? gc.LookAroundY : -1;
             control.keyLookAround = gc.KeyLookAround || 'Alt';
+            // Look-around Area (Default right 45% side)
+            control.areaLeft = typeof gc.AreaLeft === 'number' ? gc.AreaLeft : (typeof gc.areaLeft === 'number' ? gc.areaLeft : 52.0);
+            control.areaRight = typeof gc.AreaRight === 'number' ? gc.AreaRight : (typeof gc.areaRight === 'number' ? gc.areaRight : 98.0);
+            control.areaTop = typeof gc.AreaTop === 'number' ? gc.AreaTop : (typeof gc.areaTop === 'number' ? gc.areaTop : 10.0);
+            control.areaBottom = typeof gc.AreaBottom === 'number' ? gc.AreaBottom : (typeof gc.areaBottom === 'number' ? gc.areaBottom : 90.0);
+            control.areaPreset = gc.AreaPreset || gc.areaPreset || 'right_45';
             break;
 
           case 'Dpad':
@@ -250,10 +257,13 @@ class ConfigService {
           ...base,
           LookAroundX: -1.0,
           LookAroundY: -1.0,
-          LButtonX: parseFloat((c.lButtonX || 80).toFixed(2)),
-          LButtonY: parseFloat((c.lButtonY || 70).toFixed(2)),
-          Sensitivity: c.sensitivity || 1.0,
-          SensitivityRatioY: c.sensitivityRatioY || 1.0,
+          LButtonX: parseFloat((c.lButtonX || 84.94).toFixed(2)),
+          LButtonY: parseFloat((c.lButtonY || 73.44).toFixed(2)),
+          Sensitivity: c.mouseSensitivityX || c.sensitivity || 1.60,
+          SensitivityRatioY: c.mouseSensitivityY || c.sensitivityRatioY || 1.60,
+          MouseSensitivityX: c.mouseSensitivityX || c.sensitivity || 1.60,
+          MouseSensitivityY: c.mouseSensitivityY || c.sensitivityRatioY || 1.60,
+          SensScale: c.sensScale || 1.0,
           GamepadSensitivity: 777.0,
           IsLookAroundEnabled: c.isLookAroundEnabled !== false,
           IsShootOnClickEnabled: c.isShootOnClickEnabled !== false,
@@ -269,10 +279,15 @@ class ConfigService {
           IsCrosshairEnabled: c.isCrosshairEnabled !== false,
           CrosshairX: c.crosshairX || 50.05,
           CrosshairY: c.crosshairY || 50.05,
-          CrosshairType: 'Cross',
+          CrosshairType: c.crosshairType || 'Cross',
           CrosshairSize: c.crosshairSize || 1.0,
-          CrosshairOpacity: 100.0,
+          CrosshairOpacity: c.crosshairOpacity || 100.0,
           CrosshairColor: c.crosshairColor || '#FFFFFF',
+          AreaLeft: c.areaLeft !== undefined ? c.areaLeft : 52.0,
+          AreaRight: c.areaRight !== undefined ? c.areaRight : 98.0,
+          AreaTop: c.areaTop !== undefined ? c.areaTop : 10.0,
+          AreaBottom: c.areaBottom !== undefined ? c.areaBottom : 90.0,
+          AreaPreset: c.areaPreset || 'right_45',
           Left: 250.0,
           Right: 250.0,
           Top: 1000.0,

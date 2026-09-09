@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Crosshair, Move, MousePointer, Zap, Code, ArrowUp, RotateCw, ZoomIn } from 'lucide-react';
+import { Crosshair, Move, MousePointer, Zap, Code, ArrowUp, RotateCw, ZoomIn, Settings } from 'lucide-react';
 
 export default function KeyOverlay({
   scheme,
@@ -35,28 +35,105 @@ export default function KeyOverlay({
     });
   };
 
+  const handleAreaMouseDown = (e, ctrl, handleType = 'box') => {
+    if (!isEditorOpen) return;
+    e.stopPropagation();
+    onSelectControl(ctrl.id);
+
+    const rect = containerRef.current.getBoundingClientRect();
+    setDraggingId(`area_${handleType}_${ctrl.id}`);
+    setDragOffset({
+      mouseX: e.clientX - rect.left,
+      mouseY: e.clientY - rect.top,
+      initialLeft: ctrl.areaLeft !== undefined ? ctrl.areaLeft : 52.0,
+      initialRight: ctrl.areaRight !== undefined ? ctrl.areaRight : 98.0,
+      initialTop: ctrl.areaTop !== undefined ? ctrl.areaTop : 10.0,
+      initialBottom: ctrl.areaBottom !== undefined ? ctrl.areaBottom : 90.0,
+    });
+  };
+
   const handleMouseMove = (e) => {
     if (!draggingId || !isEditorOpen) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const currentX = e.clientX - rect.left - dragOffset.x;
-    const currentY = e.clientY - rect.top - dragOffset.y;
+    if (rect.width <= 0 || rect.height <= 0) return;
 
-    let percentX = (currentX / rect.width) * 100;
-    let percentY = (currentY / rect.height) * 100;
+    // Handle Area Bounding Box / Resize Handles Dragging
+    if (draggingId.startsWith('area_')) {
+      const parts = draggingId.split('_'); // ['area', handleType, ...ctrlIdParts]
+      const handleType = parts[1];
+      const ctrlId = parts.slice(2).join('_');
+      
+      const currentMouseX = e.clientX - rect.left;
+      const currentMouseY = e.clientY - rect.top;
 
-    // Clamp inside container
-    percentX = Math.max(1, Math.min(99, percentX));
-    percentY = Math.max(1, Math.min(99, percentY));
+      const deltaPercentX = ((currentMouseX - dragOffset.mouseX) / rect.width) * 100;
+      const deltaPercentY = ((currentMouseY - dragOffset.mouseY) / rect.height) * 100;
 
+      let newLeft = dragOffset.initialLeft;
+      let newRight = dragOffset.initialRight;
+      let newTop = dragOffset.initialTop;
+      let newBottom = dragOffset.initialBottom;
+
+      if (handleType === 'box') {
+        const areaWidth = newRight - newLeft;
+        const areaHeight = newBottom - newTop;
+
+        newLeft = Math.max(0, Math.min(100 - areaWidth, dragOffset.initialLeft + deltaPercentX));
+        newRight = newLeft + areaWidth;
+        newTop = Math.max(0, Math.min(100 - areaHeight, dragOffset.initialTop + deltaPercentY));
+        newBottom = newTop + areaHeight;
+      } else if (handleType === 'tl') {
+        newLeft = Math.max(0, Math.min(newRight - 5, dragOffset.initialLeft + deltaPercentX));
+        newTop = Math.max(0, Math.min(newBottom - 5, dragOffset.initialTop + deltaPercentY));
+      } else if (handleType === 'tr') {
+        newRight = Math.max(newLeft + 5, Math.min(100, dragOffset.initialRight + deltaPercentX));
+        newTop = Math.max(0, Math.min(newBottom - 5, dragOffset.initialTop + deltaPercentY));
+      } else if (handleType === 'bl') {
+        newLeft = Math.max(0, Math.min(newRight - 5, dragOffset.initialLeft + deltaPercentX));
+        newBottom = Math.max(newTop + 5, Math.min(100, dragOffset.initialBottom + deltaPercentY));
+      } else if (handleType === 'br') {
+        newRight = Math.max(newLeft + 5, Math.min(100, dragOffset.initialRight + deltaPercentX));
+        newBottom = Math.max(newTop + 5, Math.min(100, dragOffset.initialBottom + deltaPercentY));
+      } else if (handleType === 'l') {
+        newLeft = Math.max(0, Math.min(newRight - 5, dragOffset.initialLeft + deltaPercentX));
+      } else if (handleType === 'r') {
+        newRight = Math.max(newLeft + 5, Math.min(100, dragOffset.initialRight + deltaPercentX));
+      }
+
+      if (onUpdateControl) {
+        onUpdateControl(ctrlId, {
+          areaLeft: parseFloat(newLeft.toFixed(1)),
+          areaRight: parseFloat(newRight.toFixed(1)),
+          areaTop: parseFloat(newTop.toFixed(1)),
+          areaBottom: parseFloat(newBottom.toFixed(1)),
+          areaPreset: 'custom',
+        });
+      }
+      return;
+    }
+
+    // Handle Fire button dragging
     if (draggingId.startsWith('fire_')) {
       const parentId = draggingId.replace('fire_', '');
+      const currentX = e.clientX - rect.left - dragOffset.x;
+      const currentY = e.clientY - rect.top - dragOffset.y;
+      let percentX = Math.max(1, Math.min(99, (currentX / rect.width) * 100));
+      let percentY = Math.max(1, Math.min(99, (currentY / rect.height) * 100));
+
       if (onUpdateControl) {
         onUpdateControl(parentId, { lButtonX: percentX, lButtonY: percentY });
       }
-    } else {
-      onUpdateControlPosition(draggingId, percentX, percentY);
+      return;
     }
+
+    // Handle Normal Control node dragging
+    const currentX = e.clientX - rect.left - dragOffset.x;
+    const currentY = e.clientY - rect.top - dragOffset.y;
+    let percentX = Math.max(1, Math.min(99, (currentX / rect.width) * 100));
+    let percentY = Math.max(1, Math.min(99, (currentY / rect.height) * 100));
+
+    onUpdateControlPosition(draggingId, percentX, percentY);
   };
 
   const handleMouseUp = () => {
@@ -131,9 +208,14 @@ export default function KeyOverlay({
             ? ctrl.mouseSensitivityY 
             : (typeof ctrl.sensitivityRatioY === 'number' ? ctrl.sensitivityRatioY : 1.60);
 
+          const aLeft = ctrl.areaLeft !== undefined ? ctrl.areaLeft : 52.0;
+          const aRight = ctrl.areaRight !== undefined ? ctrl.areaRight : 98.0;
+          const aTop = ctrl.areaTop !== undefined ? ctrl.areaTop : 10.0;
+          const aBottom = ctrl.areaBottom !== undefined ? ctrl.areaBottom : 90.0;
+
           const handleStepX = (e, delta) => {
             e.stopPropagation();
-            const newVal = Math.max(0.1, Math.min(20.0, parseFloat((sensX + delta).toFixed(2))));
+            const newVal = Math.max(0.05, Math.min(20.0, parseFloat((sensX + delta).toFixed(2))));
             if (onUpdateControl) {
               onUpdateControl(ctrl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
             }
@@ -141,7 +223,7 @@ export default function KeyOverlay({
 
           const handleStepY = (e, delta) => {
             e.stopPropagation();
-            const newVal = Math.max(0.1, Math.min(20.0, parseFloat((sensY + delta).toFixed(2))));
+            const newVal = Math.max(0.05, Math.min(20.0, parseFloat((sensY + delta).toFixed(2))));
             if (onUpdateControl) {
               onUpdateControl(ctrl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
             }
@@ -149,7 +231,34 @@ export default function KeyOverlay({
 
           return (
             <React.Fragment key={ctrl.id}>
-              {/* Pan Reticle / Toggle Key Indicator (Matching Screenshot 1 & 2) */}
+              {/* Look-around Area (Aim Camera Zone) Bounded Box in Editor Mode */}
+              {isEditorOpen && (
+                <div
+                  className={`lookaround-area-box ${isSelected ? 'active-zone' : ''}`}
+                  style={{
+                    left: `${aLeft}%`,
+                    top: `${aTop}%`,
+                    width: `${Math.max(5, aRight - aLeft)}%`,
+                    height: `${Math.max(5, aBottom - aTop)}%`,
+                  }}
+                  onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'box')}
+                >
+                  <div className="area-header-badge">
+                    <Crosshair size={11} />
+                    <span>Look-around Area ({Math.round(aRight - aLeft)}% width)</span>
+                  </div>
+
+                  {/* Corner & Border Resize Handles */}
+                  <div className="area-resize-handle handle-tl" onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'tl')} title="Resize top-left" />
+                  <div className="area-resize-handle handle-tr" onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'tr')} title="Resize top-right" />
+                  <div className="area-resize-handle handle-bl" onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'bl')} title="Resize bottom-left" />
+                  <div className="area-resize-handle handle-br" onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'br')} title="Resize bottom-right" />
+                  <div className="area-resize-handle handle-l" onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'l')} title="Resize left border" />
+                  <div className="area-resize-handle handle-r" onMouseDown={(e) => handleAreaMouseDown(e, ctrl, 'r')} title="Resize right border" />
+                </div>
+              )}
+
+              {/* Pan Reticle / Toggle Key Indicator */}
               <div
                 className={`overlay-pan ${isSelected ? 'selected' : ''} ${isEditorOpen ? 'draggable' : ''}`}
                 style={{
@@ -179,7 +288,7 @@ export default function KeyOverlay({
                     )}
                   </div>
 
-                  {/* Central Key Button (Red Ring matching screenshot) */}
+                  {/* Central Key Button (Red Ring matching MSI App Player) */}
                   <div 
                     className={`pan-key-badge ${isKeyActive(ctrl.keyStartStop) ? 'active' : ''}`}
                     onClick={(e) => {
@@ -217,7 +326,7 @@ export default function KeyOverlay({
                         e.stopPropagation();
                         if (onOpenPanSettings) onOpenPanSettings(ctrl);
                       }}
-                      title="Aim, Pan & Shoot Advanced Settings"
+                      title="Aim, Pan & Sensitivity Settings"
                     >
                       ⚙️
                     </button>
@@ -238,7 +347,6 @@ export default function KeyOverlay({
                   onMouseDown={(e) => {
                     if (isEditorOpen) {
                       e.stopPropagation();
-                      // Drag fire button position
                       setDraggingId('fire_' + ctrl.id);
                       const rect = containerRef.current.getBoundingClientRect();
                       const curX = ((ctrl.lButtonX || 84.94) / 100) * rect.width;

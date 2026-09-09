@@ -83,9 +83,7 @@ class KeymapperService {
     if (panControl && (this.matchKey(panControl.keyStartStop, key, code) || this.matchKey(panControl.keyStartStop_alt1, key, code))) {
       this.isShootingMode = !this.isShootingMode;
       if (this.isShootingMode) {
-        this.panCenter = { x: panControl.x, y: panControl.y };
-        this.panCurrentX = panControl.x;
-        this.panCurrentY = panControl.y;
+        this.initPanAnchor(panControl);
         this.sendTouchEvent(2, 0, this.panCurrentX, this.panCurrentY);
       } else {
         this.sendTouchEvent(2, 2, this.panCurrentX, this.panCurrentY);
@@ -250,57 +248,94 @@ class KeymapperService {
     return this.handleKeyUp(btnName, btnName);
   }
 
-  // Handle Mouse Move (in shooting mode with raw movement deltas)
+  initPanAnchor(panControl) {
+    if (!panControl) return;
+
+    // Look-around Area (Default right 45% side: Left 52%, Right 98%, Top 10%, Bottom 90%)
+    const areaLeft = typeof panControl.areaLeft === 'number' ? Math.max(0, Math.min(95, panControl.areaLeft)) : 52.0;
+    const areaRight = typeof panControl.areaRight === 'number' ? Math.max(areaLeft + 5, Math.min(100, panControl.areaRight)) : 98.0;
+    const areaTop = typeof panControl.areaTop === 'number' ? Math.max(0, Math.min(95, panControl.areaTop)) : 10.0;
+    const areaBottom = typeof panControl.areaBottom === 'number' ? Math.max(areaTop + 5, Math.min(100, panControl.areaBottom)) : 90.0;
+
+    this.panBounds = { left: areaLeft, right: areaRight, top: areaTop, bottom: areaBottom };
+
+    // Center anchor inside the Look-around Area
+    const centerX = (areaLeft + areaRight) / 2;
+    const centerY = (areaTop + areaBottom) / 2;
+
+    this.panCenter = { x: centerX, y: centerY };
+    this.panCurrentX = centerX;
+    this.panCurrentY = centerY;
+  }
+
+  // Handle Mouse Move (calibrated to 100% match MSI App Player & BlueStacks 5 isotropic sensitivity)
   handleMouseMove(movementX, movementY) {
     if (!this.isShootingMode || this.isSuspended || !this.activeScheme) return;
 
     const panControl = this.activeScheme.gameControls.find(c => c.type === 'Pan');
     if (!panControl) return;
 
-    // Independent X and Y sensitivity (default 1.60 matching BlueStacks / MSI App Player)
-    const rawSensX = typeof panControl.mouseSensitivityX === 'number' 
+    if (!this.panBounds) {
+      this.initPanAnchor(panControl);
+    }
+
+    // Global Sensitivity scale multiplier (default 1.0)
+    const sensScale = typeof panControl.sensScale === 'number' ? panControl.sensScale : 1.0;
+    
+    // X & Y raw sensitivity from config (default 1.60)
+    const rawSensX = (typeof panControl.mouseSensitivityX === 'number' 
       ? panControl.mouseSensitivityX 
-      : (typeof panControl.sensitivity === 'number' ? panControl.sensitivity : 1.60);
+      : (typeof panControl.sensitivity === 'number' ? panControl.sensitivity : 1.60)) * sensScale;
 
-    const rawSensY = typeof panControl.mouseSensitivityY === 'number' 
+    const rawSensY = (typeof panControl.mouseSensitivityY === 'number' 
       ? panControl.mouseSensitivityY 
-      : (typeof panControl.sensitivityRatioY === 'number' ? panControl.sensitivityRatioY : rawSensX);
+      : (typeof panControl.sensitivityRatioY === 'number' ? panControl.sensitivityRatioY : rawSensX)) * sensScale;
 
-    // Base multiplier tuned for 1:1 mouse translation in Android 3D camera
-    const baseMultiplier = 0.075;
+    // Isotropic base multiplier: ensures 1:1 camera rotation in 3D mobile shooters
+    // Normalized to 1920x1080 reference frame
+    const BASE_PIXEL_SCALE = 1.20;
 
     let accelFactor = 1.0;
     if (panControl.mouseAcceleration) {
       const mouseSpeed = Math.hypot(movementX, movementY);
-      accelFactor = Math.min(2.5, 1.0 + mouseSpeed * 0.02);
+      accelFactor = Math.min(2.5, 1.0 + Math.pow(mouseSpeed, 1.15) * 0.012);
     }
 
-    const deltaX = movementX * rawSensX * baseMultiplier * accelFactor;
-    const deltaY = movementY * rawSensY * baseMultiplier * accelFactor;
+    // Convert mouse counts directly to screen percentage deltas
+    // X: (movementX * sensX * scale / 1920) * 100 = movementX * sensX * 0.0625
+    // Y: (movementY * sensY * scale / 1080) * 100 = movementY * sensY * 0.1111
+    const deltaX = (movementX * rawSensX * BASE_PIXEL_SCALE / 19.2) * accelFactor;
+    const deltaY = (movementY * rawSensY * BASE_PIXEL_SCALE / 10.8) * accelFactor;
 
     this.panCurrentX += deltaX;
     this.panCurrentY += deltaY;
 
-    // Boundary check with wide pan radius (38%) to avoid frequent resets
-    const distFromCenter = Math.hypot(this.panCurrentX - this.panCenter.x, this.panCurrentY - this.panCenter.y);
-    const maxRadius = panControl.panRadius || 38.0;
-
+    // Bounded Look-around Area check (default Right 45% side)
+    const bounds = this.panBounds || { left: 52.0, right: 98.0, top: 10.0, bottom: 90.0 };
     const isOutOfBounds = 
-      this.panCurrentX < 4.0 || 
-      this.panCurrentX > 96.0 || 
-      this.panCurrentY < 4.0 || 
-      this.panCurrentY > 96.0 || 
-      distFromCenter > maxRadius;
+      this.panCurrentX <= bounds.left || 
+      this.panCurrentX >= bounds.right || 
+      this.panCurrentY <= bounds.top || 
+      this.panCurrentY >= bounds.bottom;
 
     if (isOutOfBounds) {
-      // Instant seamless micro-reset: UP at current position, then immediate DOWN & MOVE at center
+      // BlueStacks / MSI App Player Tweaks 948816450 / 16450 instantaneous micro-reset:
+      // 1. Lift touch up at current boundary
       this.sendTouchEvent(2, 2, this.panCurrentX, this.panCurrentY);
+      
+      // 2. Teleport back to center anchor of the right look-around area
       this.panCurrentX = this.panCenter.x;
       this.panCurrentY = this.panCenter.y;
+      
+      // 3. Touch down at center anchor
       this.sendTouchEvent(2, 0, this.panCurrentX, this.panCurrentY);
-      this.sendTouchEvent(2, 1, this.panCurrentX + deltaX * 0.5, this.panCurrentY + deltaY * 0.5);
+      
+      // 4. Apply current frame delta and resume dragging
+      this.panCurrentX += deltaX;
+      this.panCurrentY += deltaY;
+      this.sendTouchEvent(2, 1, this.panCurrentX, this.panCurrentY);
     } else {
-      // Smooth continuous look-around drag
+      // Continuous fluid camera sweep
       this.sendTouchEvent(2, 1, this.panCurrentX, this.panCurrentY);
     }
   }

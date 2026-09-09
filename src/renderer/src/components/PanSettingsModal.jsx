@@ -7,10 +7,62 @@ import {
   Crosshair, 
   Info, 
   Plus, 
-  Minus,
-  Check,
-  ChevronDown
+  Minus, 
+  Check, 
+  Maximize, 
+  Sliders, 
+  Gauge, 
+  Layers,
+  Sparkles
 } from 'lucide-react';
+
+const AREA_PRESETS = [
+  {
+    id: 'right_45',
+    name: 'Right 45% Side (MSI / BlueStacks Default)',
+    desc: 'Best for Free Fire & BGMI. Prevents interference with joystick/movement.',
+    left: 52.0,
+    right: 98.0,
+    top: 10.0,
+    bottom: 90.0,
+  },
+  {
+    id: 'right_half',
+    name: 'Right Half (50% - 100%)',
+    desc: 'Wider camera swipe area across entire right half of the screen.',
+    left: 50.0,
+    right: 100.0,
+    top: 0.0,
+    bottom: 100.0,
+  },
+  {
+    id: 'right_upper',
+    name: 'Right Upper Zone (5% - 65%)',
+    desc: 'Leaves bottom-right clear for weapon slots & jump/crouch buttons.',
+    left: 52.0,
+    right: 98.0,
+    top: 5.0,
+    bottom: 65.0,
+  },
+  {
+    id: 'fullscreen',
+    name: 'Full Screen (5% - 95%)',
+    desc: 'Full viewport look-around area for RPGs or open-world exploration.',
+    left: 5.0,
+    right: 95.0,
+    top: 5.0,
+    bottom: 95.0,
+  },
+  {
+    id: 'custom',
+    name: 'Custom Bounding Area',
+    desc: 'Manual percentage coordinates or drag directly on-screen.',
+    left: 52.0,
+    right: 98.0,
+    top: 10.0,
+    bottom: 90.0,
+  }
+];
 
 export default function PanSettingsModal({
   isOpen,
@@ -51,22 +103,47 @@ export default function PanSettingsModal({
     ? panControl.mouseSensitivityY 
     : (typeof panControl.sensitivityRatioY === 'number' ? panControl.sensitivityRatioY : 1.60);
 
+  const sensScale = typeof panControl.sensScale === 'number' ? panControl.sensScale : 1.0;
+
+  const areaLeft = typeof panControl.areaLeft === 'number' ? panControl.areaLeft : 52.0;
+  const areaRight = typeof panControl.areaRight === 'number' ? panControl.areaRight : 98.0;
+  const areaTop = typeof panControl.areaTop === 'number' ? panControl.areaTop : 10.0;
+  const areaBottom = typeof panControl.areaBottom === 'number' ? panControl.areaBottom : 90.0;
+  const areaPreset = panControl.areaPreset || 'right_45';
+
   const updateSensX = (val) => {
-    const num = Math.max(0.1, Math.min(20.0, parseFloat(val) || 1.60));
+    const num = Math.max(0.05, Math.min(20.0, parseFloat(Number(val).toFixed(2)) || 1.60));
     onUpdatePanControl({ mouseSensitivityX: num, sensitivity: num });
   };
 
   const updateSensY = (val) => {
-    const num = Math.max(0.1, Math.min(20.0, parseFloat(val) || 1.60));
+    const num = Math.max(0.05, Math.min(20.0, parseFloat(Number(val).toFixed(2)) || 1.60));
     onUpdatePanControl({ mouseSensitivityY: num, sensitivityRatioY: num });
+  };
+
+  const handleApplyAreaPreset = (preset) => {
+    if (preset.id === 'custom') {
+      onUpdatePanControl({ areaPreset: 'custom' });
+    } else {
+      onUpdatePanControl({
+        areaPreset: preset.id,
+        areaLeft: preset.left,
+        areaRight: preset.right,
+        areaTop: preset.top,
+        areaBottom: preset.bottom,
+      });
+    }
   };
 
   return (
     <div className="pan-modal-overlay" onClick={onClose} onKeyDown={handleKeyCapture} tabIndex={0}>
       <div className="pan-modal-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
-        {/* Header (Matching Screenshot 3) */}
+        {/* Header */}
         <div className="pan-modal-header">
-          <span className="pan-modal-title">Aim, pan and shoot settings</span>
+          <div className="pan-modal-header-left">
+            <Crosshair size={18} className="text-primary" />
+            <span className="pan-modal-title">Aim, pan and shoot settings</span>
+          </div>
           <button className="btn-icon-small" onClick={onClose} title="Close">
             <X size={16} />
           </button>
@@ -117,32 +194,128 @@ export default function PanSettingsModal({
             </div>
           </div>
 
-          {/* 2. Properties (Coordinates, Sensitivity X/Y, Tweaks, Mouse Acceleration) */}
+          {/* 2. LOOK-AROUND AREA / CAMERA AIM ZONE (Default Right 45% side) */}
+          <div className="pan-section pan-area-section">
+            <div className="pan-section-header-row">
+              <span className="pan-section-heading">Look-around Area (Camera Zone)</span>
+              <span className="pan-badge-accent">Default: Right 45%</span>
+            </div>
+            
+            <div className="pan-guide-alert">
+              <span className="pan-guide-icon">📐</span>
+              <span className="pan-guide-text">
+                Mouse aim swipe applies inside this bounded screen zone. Reaching borders executes an instantaneous recenter without interrupting camera rotation.
+              </span>
+            </div>
+
+            {/* Area Presets */}
+            <div className="pan-prop-row">
+              <label>Area Preset</label>
+              <select 
+                className="pan-select"
+                value={areaPreset}
+                onChange={(e) => {
+                  const p = AREA_PRESETS.find(item => item.id === e.target.value) || AREA_PRESETS[0];
+                  handleApplyAreaPreset(p);
+                }}
+              >
+                {AREA_PRESETS.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Custom Coordinate Bounds (Left %, Right %, Top %, Bottom %) */}
+            <div className="pan-area-bounds-grid">
+              <div className="area-bound-box">
+                <span className="bound-label">Left X (%)</span>
+                <input 
+                  type="number" 
+                  step="0.5" 
+                  min="0" 
+                  max="95" 
+                  className="pan-input"
+                  value={areaLeft.toFixed(1)} 
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(areaRight - 5, parseFloat(e.target.value) || 0));
+                    onUpdatePanControl({ areaLeft: v, areaPreset: 'custom' });
+                  }}
+                />
+              </div>
+
+              <div className="area-bound-box">
+                <span className="bound-label">Right X (%)</span>
+                <input 
+                  type="number" 
+                  step="0.5" 
+                  min="5" 
+                  max="100" 
+                  className="pan-input"
+                  value={areaRight.toFixed(1)} 
+                  onChange={(e) => {
+                    const v = Math.max(areaLeft + 5, Math.min(100, parseFloat(e.target.value) || 100));
+                    onUpdatePanControl({ areaRight: v, areaPreset: 'custom' });
+                  }}
+                />
+              </div>
+
+              <div className="area-bound-box">
+                <span className="bound-label">Top Y (%)</span>
+                <input 
+                  type="number" 
+                  step="0.5" 
+                  min="0" 
+                  max="95" 
+                  className="pan-input"
+                  value={areaTop.toFixed(1)} 
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(areaBottom - 5, parseFloat(e.target.value) || 0));
+                    onUpdatePanControl({ areaTop: v, areaPreset: 'custom' });
+                  }}
+                />
+              </div>
+
+              <div className="area-bound-box">
+                <span className="bound-label">Bottom Y (%)</span>
+                <input 
+                  type="number" 
+                  step="0.5" 
+                  min="5" 
+                  max="100" 
+                  className="pan-input"
+                  value={areaBottom.toFixed(1)} 
+                  onChange={(e) => {
+                    const v = Math.max(areaTop + 5, Math.min(100, parseFloat(e.target.value) || 100));
+                    onUpdatePanControl({ areaBottom: v, areaPreset: 'custom' });
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 3. MOUSE SENSITIVITY & FEEL (Calibrated to MSI App Player & BlueStacks 5) */}
           <div className="pan-section">
-            <div className="pan-section-heading">Properties</div>
+            <div className="pan-section-heading">Mouse Sensitivity &amp; Engine</div>
 
+            {/* Global Multiplier */}
             <div className="pan-prop-row">
-              <label>X</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                className="pan-input"
-                value={(panControl.x || 50).toFixed(2)} 
-                onChange={(e) => onUpdatePanControl({ x: parseFloat(e.target.value) || 0 })}
-              />
+              <label>Global Multiplier</label>
+              <select 
+                className="pan-select"
+                value={sensScale.toFixed(2)}
+                onChange={(e) => onUpdatePanControl({ sensScale: parseFloat(e.target.value) || 1.0 })}
+              >
+                <option value="0.50">0.50x (Ultra Slow / Precision)</option>
+                <option value="0.75">0.75x (Slow)</option>
+                <option value="1.00">1.00x (Standard MSI / BlueStacks 1:1)</option>
+                <option value="1.25">1.25x (Fast)</option>
+                <option value="1.50">1.50x (High Speed)</option>
+                <option value="2.00">2.00x (Ultra Fast / High DPI)</option>
+                <option value="3.00">3.00x (Extreme)</option>
+              </select>
             </div>
 
-            <div className="pan-prop-row">
-              <label>Y</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                className="pan-input"
-                value={(panControl.y || 50).toFixed(2)} 
-                onChange={(e) => onUpdatePanControl({ y: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-
+            {/* Mouse Sensitivity X */}
             <div className="pan-prop-row">
               <label>Mouse sensitivity X</label>
               <div className="pan-stepper-input">
@@ -150,7 +323,7 @@ export default function PanSettingsModal({
                 <input 
                   type="number" 
                   step="0.05" 
-                  min="0.1" 
+                  min="0.05" 
                   max="20.0" 
                   className="pan-input-stepper"
                   value={sensX.toFixed(2)} 
@@ -160,6 +333,7 @@ export default function PanSettingsModal({
               </div>
             </div>
 
+            {/* Mouse Sensitivity Y */}
             <div className="pan-prop-row">
               <label>Mouse sensitivity Y</label>
               <div className="pan-stepper-input">
@@ -167,7 +341,7 @@ export default function PanSettingsModal({
                 <input 
                   type="number" 
                   step="0.05" 
-                  min="0.1" 
+                  min="0.05" 
                   max="20.0" 
                   className="pan-input-stepper"
                   value={sensY.toFixed(2)} 
@@ -177,17 +351,22 @@ export default function PanSettingsModal({
               </div>
             </div>
 
+            {/* Tweaks Profile */}
             <div className="pan-prop-row">
-              <label>Tweaks</label>
-              <input 
-                type="text" 
-                className="pan-input"
-                value={panControl.tweaks !== undefined ? panControl.tweaks : '948816450'} 
+              <label>Tweaks Profile</label>
+              <select 
+                className="pan-select"
+                value={panControl.tweaks !== undefined ? panControl.tweaks : '948816450'}
                 onChange={(e) => onUpdatePanControl({ tweaks: e.target.value })}
-                placeholder="16450 or 948816450"
-              />
+              >
+                <option value="948816450">948816450 (BlueStacks 5 Fast Continuous Swipe)</option>
+                <option value="16450">16450 (MSI App Player Default)</option>
+                <option value="2">2 (Standard Android Joystick)</option>
+                <option value="0">0 (Raw Touch)</option>
+              </select>
             </div>
 
+            {/* Mouse acceleration */}
             <div className="pan-prop-row">
               <label>Mouse acceleration</label>
               <select 
@@ -195,13 +374,36 @@ export default function PanSettingsModal({
                 value={panControl.mouseAcceleration ? 'TRUE' : 'FALSE'}
                 onChange={(e) => onUpdatePanControl({ mouseAcceleration: e.target.value === 'TRUE' })}
               >
-                <option value="FALSE">FALSE</option>
-                <option value="TRUE">TRUE</option>
+                <option value="FALSE">FALSE (1:1 Raw Linear Competitive)</option>
+                <option value="TRUE">TRUE (Dynamic Acceleration Curve)</option>
               </select>
+            </div>
+
+            {/* Reticle Coordinates X / Y */}
+            <div className="pan-prop-row">
+              <label>Anchor Center X / Y (%)</label>
+              <div className="pan-dual-input">
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  className="pan-input"
+                  value={(panControl.x || 50).toFixed(1)} 
+                  onChange={(e) => onUpdatePanControl({ x: parseFloat(e.target.value) || 0 })}
+                  title="Anchor X %"
+                />
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  className="pan-input"
+                  value={(panControl.y || 50).toFixed(1)} 
+                  onChange={(e) => onUpdatePanControl({ y: parseFloat(e.target.value) || 0 })}
+                  title="Anchor Y %"
+                />
+              </div>
             </div>
           </div>
 
-          {/* 3. Crosshair Section */}
+          {/* 4. Crosshair Section */}
           <div className="pan-section">
             <div className="pan-section-header-toggle">
               <span className="pan-section-heading">Crosshair</span>
@@ -245,12 +447,12 @@ export default function PanSettingsModal({
                 </div>
 
                 <div className="pan-prop-row">
-                  <label>Opacity (Changes appear in shooting mode)</label>
+                  <label>Opacity (%)</label>
                   <input 
                     type="number" 
                     step="5" 
                     min="10" 
-                    max="100"
+                    max="100" 
                     className="pan-input"
                     value={panControl.crosshairOpacity || 100} 
                     onChange={(e) => onUpdatePanControl({ crosshairOpacity: parseInt(e.target.value, 10) || 100 })}
@@ -263,13 +465,13 @@ export default function PanSettingsModal({
                     <input 
                       type="color" 
                       className="pan-color-box"
-                      value={panControl.crosshairColor || '#FFFFFF'} 
+                      value={panControl.crosshairColor || '#00E5FF'} 
                       onChange={(e) => onUpdatePanControl({ crosshairColor: e.target.value })}
                     />
                     <input 
                       type="text" 
                       className="pan-input pan-input-color-hex"
-                      value={panControl.crosshairColor || '#FFFFFF'} 
+                      value={panControl.crosshairColor || '#00E5FF'} 
                       onChange={(e) => onUpdatePanControl({ crosshairColor: e.target.value })}
                     />
                   </div>
@@ -278,7 +480,7 @@ export default function PanSettingsModal({
             )}
           </div>
 
-          {/* 4. Fire with left click Section */}
+          {/* 5. Fire with left click Section */}
           <div className="pan-section">
             <div className="pan-section-header-toggle">
               <span className="pan-section-heading">Fire with left click</span>
@@ -296,14 +498,14 @@ export default function PanSettingsModal({
               <div className="pan-subprops">
                 <div className="pan-guide-alert">
                   <span className="pan-guide-icon">🎯</span>
-                  <span className="pan-guide-text">Place the fire icon in the fire weapon control on the screen</span>
+                  <span className="pan-guide-text">Place the fire icon on your in-game fire weapon button</span>
                 </div>
 
                 <div className="pan-prop-row">
-                  <label>Action position X</label>
+                  <label>Fire position X (%)</label>
                   <input 
                     type="number" 
-                    step="0.01" 
+                    step="0.1" 
                     className="pan-input"
                     value={(panControl.lButtonX !== undefined ? panControl.lButtonX : 84.94).toFixed(2)} 
                     onChange={(e) => onUpdatePanControl({ lButtonX: parseFloat(e.target.value) || 0 })}
@@ -311,10 +513,10 @@ export default function PanSettingsModal({
                 </div>
 
                 <div className="pan-prop-row">
-                  <label>Action position Y</label>
+                  <label>Fire position Y (%)</label>
                   <input 
                     type="number" 
-                    step="0.01" 
+                    step="0.1" 
                     className="pan-input"
                     value={(panControl.lButtonY !== undefined ? panControl.lButtonY : 73.44).toFixed(2)} 
                     onChange={(e) => onUpdatePanControl({ lButtonY: parseFloat(e.target.value) || 0 })}
@@ -329,10 +531,10 @@ export default function PanSettingsModal({
             )}
           </div>
 
-          {/* 5. Look around mode (Free Look) */}
+          {/* 6. Look around mode (Free Look) */}
           <div className="pan-section">
             <div className="pan-section-header-toggle">
-              <span className="pan-section-heading">Look around mode</span>
+              <span className="pan-section-heading">Look around mode (Free Look)</span>
               <label className="pan-switch">
                 <input 
                   type="checkbox" 
@@ -347,14 +549,14 @@ export default function PanSettingsModal({
               <div className="pan-subprops">
                 <div className="pan-guide-alert">
                   <span className="pan-guide-icon">👁️</span>
-                  <span className="pan-guide-text">Place the eye icon on the look around control if available</span>
+                  <span className="pan-guide-text">Place the eye icon on the in-game eye look control if available</span>
                 </div>
 
                 <div className="pan-prop-row">
-                  <label>Free look position X</label>
+                  <label>Free look position X (%)</label>
                   <input 
                     type="number" 
-                    step="0.01" 
+                    step="0.1" 
                     className="pan-input"
                     value={panControl.lookAroundX !== undefined ? panControl.lookAroundX : -1} 
                     onChange={(e) => onUpdatePanControl({ lookAroundX: parseFloat(e.target.value) || -1 })}
@@ -362,10 +564,10 @@ export default function PanSettingsModal({
                 </div>
 
                 <div className="pan-prop-row">
-                  <label>Free look position Y</label>
+                  <label>Free look position Y (%)</label>
                   <input 
                     type="number" 
-                    step="0.01" 
+                    step="0.1" 
                     className="pan-input"
                     value={panControl.lookAroundY !== undefined ? panControl.lookAroundY : -1} 
                     onChange={(e) => onUpdatePanControl({ lookAroundY: parseFloat(e.target.value) || -1 })}
@@ -373,7 +575,7 @@ export default function PanSettingsModal({
                 </div>
 
                 <div className="pan-prop-row">
-                  <label>Free look</label>
+                  <label>Free look key</label>
                   <button 
                     className={`pan-key-btn ${recordingField === 'keyLookAround' ? 'recording' : ''}`}
                     onClick={() => setRecordingField('keyLookAround')}
@@ -385,7 +587,7 @@ export default function PanSettingsModal({
             )}
           </div>
 
-          {/* 6. Show keys on-screen toggle */}
+          {/* 7. Show keys on-screen toggle */}
           <div className="pan-section pan-toggle-row-clean">
             <span className="pan-section-heading">Show keys on-screen</span>
             <label className="pan-switch">
@@ -399,7 +601,7 @@ export default function PanSettingsModal({
           </div>
         </div>
 
-        {/* Footer (Matching Screenshot 3) */}
+        {/* Footer */}
         <div className="pan-modal-footer">
           <div className="pan-footer-info">
             <Info size={14} color="#8892B0" />

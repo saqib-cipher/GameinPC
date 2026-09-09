@@ -327,7 +327,7 @@ export default function ControlsEditor({
                         className="stepper-sub-btn" 
                         onClick={() => {
                           const cur = selectedControl.mouseSensitivityX || selectedControl.sensitivity || 1.60;
-                          const newVal = Math.max(0.1, parseFloat((cur - 0.05).toFixed(2)));
+                          const newVal = Math.max(0.05, parseFloat((cur - 0.05).toFixed(2)));
                           onUpdateControl(selectedControl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
                         }}
                       >
@@ -362,7 +362,7 @@ export default function ControlsEditor({
                         className="stepper-sub-btn" 
                         onClick={() => {
                           const cur = selectedControl.mouseSensitivityY || selectedControl.sensitivityRatioY || 1.60;
-                          const newVal = Math.max(0.1, parseFloat((cur - 0.05).toFixed(2)));
+                          const newVal = Math.max(0.05, parseFloat((cur - 0.05).toFixed(2)));
                           onUpdateControl(selectedControl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
                         }}
                       >
@@ -389,6 +389,35 @@ export default function ControlsEditor({
                       </button>
                     </div>
                   </div>
+                </div>
+
+                {/* Look-around Area Quick Selector */}
+                <div className="property-row">
+                  <label>Look-around Area</label>
+                  <select
+                    className="pan-select"
+                    value={selectedControl.areaPreset || 'right_45'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'right_45') {
+                        onUpdateControl(selectedControl.id, { areaPreset: 'right_45', areaLeft: 52.0, areaRight: 98.0, areaTop: 10.0, areaBottom: 90.0 });
+                      } else if (val === 'right_half') {
+                        onUpdateControl(selectedControl.id, { areaPreset: 'right_half', areaLeft: 50.0, areaRight: 100.0, areaTop: 0.0, areaBottom: 100.0 });
+                      } else if (val === 'right_upper') {
+                        onUpdateControl(selectedControl.id, { areaPreset: 'right_upper', areaLeft: 52.0, areaRight: 98.0, areaTop: 5.0, areaBottom: 65.0 });
+                      } else if (val === 'fullscreen') {
+                        onUpdateControl(selectedControl.id, { areaPreset: 'fullscreen', areaLeft: 5.0, areaRight: 95.0, areaTop: 5.0, areaBottom: 95.0 });
+                      } else {
+                        onUpdateControl(selectedControl.id, { areaPreset: 'custom' });
+                      }
+                    }}
+                  >
+                    <option value="right_45">Right 45% (Default BlueStacks)</option>
+                    <option value="right_half">Right Half (50% - 100%)</option>
+                    <option value="right_upper">Right Upper (5% - 65%)</option>
+                    <option value="fullscreen">Full Screen (5% - 95%)</option>
+                    <option value="custom">Custom Area (Drag handles)</option>
+                  </select>
                 </div>
 
                 <div className="property-row">
