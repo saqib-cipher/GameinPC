@@ -258,6 +258,34 @@ class AdbService {
     });
   }
 
+  async getForegroundApp(serial) {
+    if (!serial && this.currentDevice) serial = this.currentDevice.serial;
+    if (!serial) return null;
+
+    try {
+      // 1. Check dumpsys window mCurrentFocus / mFocusedApp
+      const winOut = await this.runAdbCommand(['-s', serial, 'shell', 'dumpsys window | grep -E "mCurrentFocus|mFocusedApp"'], 2500);
+      if (winOut) {
+        const match = winOut.match(/([a-zA-Z0-9._]+)\/[a-zA-Z0-9._]+/);
+        if (match && match[1]) {
+          return match[1].trim();
+        }
+      }
+
+      // 2. Fallback to dumpsys activity activities ResumedActivity
+      const actOut = await this.runAdbCommand(['-s', serial, 'shell', 'dumpsys activity activities | grep -E "ResumedActivity|topResumedActivity"'], 2500);
+      if (actOut) {
+        const match = actOut.match(/([a-zA-Z0-9._]+)\/[a-zA-Z0-9._]+/);
+        if (match && match[1]) {
+          return match[1].trim();
+        }
+      }
+    } catch (err) {
+      // Ignore transient errors
+    }
+    return null;
+  }
+
   // Fallback touch and key injection methods
   async tap(serial, x, y) {
     return this.runAdbCommand(['-s', serial, 'shell', 'input', 'tap', Math.round(x), Math.round(y)]);

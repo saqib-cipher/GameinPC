@@ -53,6 +53,8 @@ export default function TopBar({
   onMinimize,
   onMaximize,
   onClose,
+  foregroundPackage,
+  isGameDetected,
 }) {
   const [isDeviceMenuOpen, setIsDeviceMenuOpen] = useState(false);
   const [isSchemeMenuOpen, setIsSchemeMenuOpen] = useState(false);
@@ -154,7 +156,13 @@ export default function TopBar({
       <div className="topbar-right">
         {/* Scheme Selector & Actions (Matching Screenshot icons) */}
         <div className="scheme-bar">
-          <div className="scheme-label">Control scheme:</div>
+          <div className="scheme-label">
+            {isGameDetected ? (
+              <span className="game-detected-tag" title={`Active Game: ${foregroundPackage}`}>
+                🎮 Game Active
+              </span>
+            ) : 'Control scheme:'}
+          </div>
           <div className="scheme-select-wrapper">
             <select 
               value={activeSchemeId || ''} 

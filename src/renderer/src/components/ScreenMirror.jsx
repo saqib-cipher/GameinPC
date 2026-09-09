@@ -33,6 +33,8 @@ export default function ScreenMirror({
   isShootingMode,
   onToggleShootingMode,
   settings,
+  foregroundPackage,
+  isGameDetected,
 }) {
   const workspaceRef = useRef(null);
   const viewportRef = useRef(null);
@@ -53,12 +55,17 @@ export default function ScreenMirror({
   const updateLayout = useCallback(() => {
     if (!workspaceRef.current) return;
     const ws = workspaceRef.current;
-    const padX = 32; // 16px padding on left and right
-    const padY = 32; // 16px padding on top and bottom
-    const availW = Math.max(100, ws.clientWidth - padX);
-    const availH = Math.max(100, ws.clientHeight - padY);
+    const rect = ws.getBoundingClientRect();
+    const pad = 24; // 12px padding around
 
-    let targetRatio = 20 / 9; // Default mobile landscape ratio
+    let availW = rect.width > 50 ? (rect.width - pad) : (window.innerWidth - (isEditorOpen ? 360 : 0) - pad);
+    let availH = rect.height > 50 ? (rect.height - pad) : (window.innerHeight - 48 - pad);
+
+    availW = Math.max(200, availW);
+    availH = Math.max(150, availH);
+
+    // Determine target aspect ratio from stream or device resolution
+    let targetRatio = 16 / 9;
     if (streamDim.width > 0 && streamDim.height > 0) {
       targetRatio = streamDim.width / streamDim.height;
     } else if (deviceDetails?.resolution?.width && deviceDetails?.resolution?.height) {
@@ -73,11 +80,19 @@ export default function ScreenMirror({
       fittedW = fittedH * targetRatio;
     }
 
+    if (fittedW > availW) {
+      fittedW = availW;
+      fittedH = fittedW / targetRatio;
+    }
+
+    fittedW = Math.max(200, Math.round(fittedW));
+    fittedH = Math.max(120, Math.round(fittedH));
+
     setViewportSize({
-      width: Math.round(fittedW),
-      height: Math.round(fittedH),
+      width: fittedW,
+      height: fittedH,
     });
-  }, [streamDim, deviceDetails]);
+  }, [streamDim, deviceDetails, isEditorOpen]);
 
   useEffect(() => {
     updateLayout();
@@ -418,6 +433,9 @@ export default function ScreenMirror({
             {/* Stream Status Badge */}
             <div className="stream-badge">
               <span className="live-dot" /> LIVE IN-WINDOW &bull; {selectedDevice?.model || 'Mobile'} ({fpsCount} FPS)
+              {isGameDetected && (
+                <span className="game-detected-sub"> &bull; 🎮 {foregroundPackage.replace(/^com\./, '')}</span>
+              )}
             </div>
 
             {/* Custom Crosshair Reticle when in Shooting Mode */}

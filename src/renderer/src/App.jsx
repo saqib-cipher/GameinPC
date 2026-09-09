@@ -46,6 +46,8 @@ export default function App() {
   const [isWirelessModalOpen, setIsWirelessModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
+  const [foregroundPackage, setForegroundPackage] = useState('');
+
   // 1. Initial Load: Schemes & Settings
   useEffect(() => {
     async function init() {
@@ -97,6 +99,7 @@ export default function App() {
         } else {
           setSelectedDevice(null);
           setDeviceDetails(null);
+          setForegroundPackage('');
         }
       } catch (err) {
         console.error('Error polling devices:', err);
@@ -109,6 +112,56 @@ export default function App() {
     const timer = setInterval(refreshDevices, 3000);
     return () => clearInterval(timer);
   }, [selectedDevice]);
+
+  // 3. Auto-Detect Active Game by Package Name
+  useEffect(() => {
+    if (!selectedDevice || !window.electronAPI?.getForegroundApp) return;
+
+    let isMounted = true;
+    const checkForeground = async () => {
+      try {
+        const pkg = await window.electronAPI.getForegroundApp(selectedDevice.serial);
+        if (isMounted && pkg && pkg !== foregroundPackage) {
+          setForegroundPackage(pkg);
+
+          // Find matching keymap scheme for this game
+          const matched = schemes.find(s => {
+            const sName = (s.name || '').toLowerCase();
+            const sPkg = (s.packageName || '').toLowerCase();
+            const p = pkg.toLowerCase();
+
+            if (sPkg && p.includes(sPkg)) return true;
+            if (p.includes('dts.freefire') || p.includes('freefire')) {
+              return sName.includes('freefire') || sName.includes('free fire') || sName.includes('cipher');
+            }
+            if (p.includes('pubg') || p.includes('imobile') || p.includes('ig')) {
+              return sName.includes('pubg') || sName.includes('bgmi');
+            }
+            if (p.includes('callofduty') || p.includes('activision')) {
+              return sName.includes('cod') || sName.includes('call of duty');
+            }
+            return sPkg === p || sName.includes(p);
+          });
+
+          if (matched) {
+            setActiveSchemeId(matched.id);
+            if (window.electronAPI) {
+              window.electronAPI.setActiveScheme(matched);
+            }
+          }
+        }
+      } catch (err) {
+        // Ignore polling errors
+      }
+    };
+
+    checkForeground();
+    const interval = setInterval(checkForeground, 1500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedDevice, foregroundPackage, schemes]);
 
   const loadDeviceDetails = async (serial) => {
     if (window.electronAPI && serial) {
@@ -129,7 +182,7 @@ export default function App() {
     loadDeviceDetails(dev.serial);
   };
 
-  // 3. Scheme Operations
+  // 4. Scheme Operations
   const activeScheme = schemes.find(s => s.id === activeSchemeId) || schemes[0];
 
   const handleSelectScheme = (schemeId) => {
@@ -341,6 +394,25 @@ export default function App() {
   const handleClose = () => window.electronAPI?.closeWindow();
   const handleToggleFullscreen = () => window.electronAPI?.toggleFullscreen();
 
+  const isGameDetected = Boolean(
+    foregroundPackage && (
+      foregroundPackage.includes('freefire') ||
+      foregroundPackage.includes('dts') ||
+      foregroundPackage.includes('pubg') ||
+      foregroundPackage.includes('imobile') ||
+      foregroundPackage.includes('callofduty') ||
+      foregroundPackage.includes('activision') ||
+      foregroundPackage.includes('shooter') ||
+      schemes.some(s => s.packageName && s.packageName.toLowerCase() === foregroundPackage.toLowerCase())
+    )
+  );
+
+  const shouldDisplayOverlay = Boolean(
+    (showOverlay && (isGameDetected || !foregroundPackage)) || 
+    isEditorOpen || 
+    isShootingMode
+  );
+
   return (
     <div className="app-container">
       {/* Top Bar HUD */}
@@ -373,6 +445,8 @@ export default function App() {
         onMinimize={handleMinimize}
         onMaximize={handleMaximize}
         onClose={handleClose}
+        foregroundPackage={foregroundPackage}
+        isGameDetected={isGameDetected}
       />
 
       {/* Main Workspace Area */}
@@ -393,7 +467,7 @@ export default function App() {
           onUpdateControlPosition={handleUpdateControlPosition}
           opacity={opacity}
           scale={scale}
-          showOverlay={showOverlay}
+          showOverlay={shouldDisplayOverlay}
           isShootingMode={isShootingMode}
           onToggleShootingMode={setIsShootingMode}
           settings={settings}
@@ -402,6 +476,8 @@ export default function App() {
           onCaptureSnapshot={handleCaptureSnapshot}
           onClearSnapshot={() => setSnapshotUrl(null)}
           onUploadSnapshot={(url) => setSnapshotUrl(url)}
+          foregroundPackage={foregroundPackage}
+          isGameDetected={isGameDetected}
         />
 
         {/* Controls Editor Sidebar (Matching Screenshot) */}

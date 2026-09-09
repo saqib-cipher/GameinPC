@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   tap: (data) => ipcRenderer.invoke('adb:tap', data),
   swipe: (data) => ipcRenderer.invoke('adb:swipe', data),
   captureScreenshot: (serial) => ipcRenderer.invoke('adb:capture-screenshot', serial),
+  getForegroundApp: (serial) => ipcRenderer.invoke('adb:get-foreground-app', serial),
 
   // Screen Mirroring
   startMirror: (data) => ipcRenderer.invoke('mirror:start', data),
