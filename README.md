@@ -4,6 +4,18 @@
 
 ---
 
+## 📥 Installation & Download (.exe)
+
+You can run **GameinPC** directly on Windows without installing Node.js, Python, or Android Studio! All required dependencies (`adb`, `scrcpy`, FFmpeg) are pre-bundled inside the `.exe`.
+
+### Download Executable (`.exe`)
+Download the latest release from **[GitHub Releases](https://github.com/saqib-cipher/GameinPC/releases/latest)**:
+
+- **`GameinPC-Setup-1.0.0.exe` (Installer)**: Standard Windows setup installer (NSIS) with Desktop & Start Menu shortcuts.
+- **`GameinPC-Portable-1.0.0.exe` (Portable)**: Standalone single `.exe` file requiring **no installation**—just double-click to run!
+
+---
+
 ## Key Features
 
 1. **Zero-Emulator Native Android Gaming**:
@@ -38,34 +50,52 @@
 
 ---
 
-## Quick Start Guide
+## Connecting Your Android Device
+
+### Option A: USB Debugging (Fastest)
+1. On your phone, go to **Settings &rarr; About phone** and tap **Build number** 7 times to enable Developer Options.
+2. Go to **Settings &rarr; Developer options** and turn ON **USB debugging**.
+3. Plug in your phone via USB cable. Accept the "Allow USB debugging" prompt on your phone screen.
+4. GameinPC will automatically detect your phone in the top bar! Click **Start Mirror & Play Game**.
+
+### Option B: Wireless Debugging (Cable-Free)
+1. Connect your phone and PC to the same Wi-Fi network.
+2. In GameinPC, click the **Wireless Debugging** button in the top bar.
+3. On Android 11+: Open **Settings &rarr; Developer options &rarr; Wireless debugging &rarr; Pair device with pairing code**.
+4. Enter the IP, Port, and 6-digit Pairing Code in GameinPC and click **Pair & Connect**.
+
+---
+
+## 🛠️ Building & Development (For Developers)
 
 ### Prerequisites
 - Windows 10 / 11
-- Node.js installed
+- Node.js (v18+)
 
-### Running the Application
+### Running from Source
 ```bash
-# 1. Start the desktop application
+# Install dependencies
+npm install
+
+# Start the application
 npm run start
 
 # Or for development with hot reload:
 npm run dev
 ```
 
-### Connecting Your Android Device
+### Packaging `.exe` Files
+```bash
+# Build both Setup Installer & Portable .exe:
+npm run dist:all
 
-#### Option A: USB Debugging (Fastest)
-1. On your phone, go to **Settings &rarr; About phone** and tap **Build number** 7 times to enable Developer Options.
-2. Go to **Settings &rarr; Developer options** and turn ON **USB debugging**.
-3. Plug in your phone via USB cable. Accept the "Allow USB debugging" prompt on your phone screen.
-4. GameinPC will automatically detect your phone in the top bar! Click **Start Mirror & Play Game**.
+# Build only Portable .exe:
+npm run dist:portable
 
-#### Option B: Wireless Debugging (Cable-Free)
-1. Connect your phone and PC to the same Wi-Fi network.
-2. In GameinPC, click the **Wireless Debugging** button in the top bar.
-3. On Android 11+: Open **Settings &rarr; Developer options &rarr; Wireless debugging &rarr; Pair device with pairing code**.
-4. Enter the IP, Port, and 6-digit Pairing Code in GameinPC and click **Pair & Connect**.
+# Build only Setup Installer:
+npm run dist
+```
+The output `.exe` files will be placed in the `release/` folder.
 
 ---
 
