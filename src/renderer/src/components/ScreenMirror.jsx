@@ -134,6 +134,8 @@ export default function ScreenMirror({
     };
   }, [updateLayout, isEditorOpen]);
 
+  const mouseAccumRef = useRef({ dx: 0, dy: 0, rafId: null });
+
   // 2. Hardware Accelerated WebCodecs H.264 In-Window Video Stream
   useEffect(() => {
     let ws = null;
@@ -176,6 +178,10 @@ export default function ScreenMirror({
             },
             error: (err) => {
               console.warn('[WebCodecs VideoDecoder error]:', err);
+              // Auto-recover decoder on orientation/stream changes
+              setTimeout(() => {
+                if (!isCleanedUp) initDecoder(codecName);
+              }, 50);
             }
           });
 
@@ -242,7 +248,20 @@ export default function ScreenMirror({
                 });
                 activeDec.decode(chunk);
               } catch (e) {
-                // If decoding fails on transient packet, continue to next keyframe
+                // If decoding fails on transient packet or orientation shift, recreate decoder
+                if (isKey) {
+                  try {
+                    activeDec = initDecoder('h264');
+                    if (activeDec && activeDec.state === 'configured') {
+                      const retryChunk = new window.EncodedVideoChunk({
+                        type: 'key',
+                        timestamp: performance.now() * 1000,
+                        data: payload,
+                      });
+                      activeDec.decode(retryChunk);
+                    }
+                  } catch (err) {}
+                }
               }
             }
           }
@@ -305,10 +324,25 @@ export default function ScreenMirror({
 
     if (isShootingMode) {
       if (document.pointerLockElement === viewportRef.current && window.electronAPI) {
-        window.electronAPI.sendMouseMove({
-          movementX: e.movementX,
-          movementY: e.movementY,
-        });
+        // High-rate micro-accumulator: eliminates IPC roundtrip queue and delivers buttery-smooth 120fps aim
+        mouseAccumRef.current.dx += e.movementX;
+        mouseAccumRef.current.dy += e.movementY;
+
+        if (!mouseAccumRef.current.rafId) {
+          mouseAccumRef.current.rafId = requestAnimationFrame(() => {
+            const { dx, dy } = mouseAccumRef.current;
+            mouseAccumRef.current.dx = 0;
+            mouseAccumRef.current.dy = 0;
+            mouseAccumRef.current.rafId = null;
+
+            if (dx !== 0 || dy !== 0) {
+              window.electronAPI.sendMouseMove({
+                movementX: dx,
+                movementY: dy,
+              });
+            }
+          });
+        }
       }
       return;
     }

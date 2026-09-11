@@ -83,7 +83,23 @@ export default function App() {
       }
     }
     init();
+
+    // Prevent Space / Enter from triggering focused topbar buttons or scrolling
+    const handleGlobalKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName;
+      const isInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT';
+      if (!isInput && (e.code === 'Space' || e.key === ' ')) {
+        if (activeTag === 'BUTTON' || activeTag === 'A') {
+          document.activeElement.blur();
+        }
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
   }, []);
+
 
   // 2. Poll for connected USB and Wireless devices
   const refreshDevices = async () => {

@@ -164,16 +164,11 @@ class StreamService {
       }
     }
 
-    // Also apply ADB stay-awake power setting
-    if (this.activeDevice?.serial) {
-      adbService.setScreenPowerMode(this.activeDevice.serial, isOff).catch(() => {});
-    }
-
     this.broadcastStatus(this.isRunning);
     return { success: true, isScreenOff: this.isScreenOff };
   }
 
-  // Start Real-time Game Audio Forwarding from Android to PC Speakers / Headset
+  // Start Real-time Game Audio Forwarding with isolated SCID and separate ports
   startAudioForwarding(serial) {
     this.stopAudioForwarding();
 
@@ -183,6 +178,8 @@ class StreamService {
       '-s', serial,
       '--no-video',
       '--no-control',
+      '--scid=05d6e7f8', // Isolated SCID so it NEVER collides with video stream socket
+      '--port=29185:29190',
       '--audio-codec=opus',
       '--audio-buffer=20',
       '--audio-output-buffer=10',
@@ -257,6 +254,9 @@ class StreamService {
     this.isScreenOff = !!settings.turnScreenOff;
     this.isAudioEnabled = settings.audioMirror !== false; // Audio enabled by default
 
+    const videoScid = '01a2b3c4';
+    const socketName = `scrcpy_${videoScid}`;
+
     console.log(`[StreamService] Starting unified in-window stream for device ${serial} (Audio=${this.isAudioEnabled}, ScreenOff=${this.isScreenOff})...`);
 
     try {
@@ -278,13 +278,13 @@ class StreamService {
       // 2. Push scrcpy-server.jar
       await adbService.runAdbCommand(['-s', serial, 'push', serverJarLocal, serverJarDevice]);
 
-      // 3. Setup local reverse TCP server
+      // 3. Setup local reverse TCP server with dedicated socket name
       await new Promise((resolve, reject) => {
         this.localTcpServer = net.createServer();
         this.localTcpServer.listen(this.reversePort, '127.0.0.1', async (err) => {
           if (err) return reject(err);
           console.log(`[StreamService] Reverse TCP server listening on port ${this.reversePort}`);
-          await adbService.runAdbCommand(['-s', serial, 'reverse', 'localabstract:scrcpy', `tcp:${this.reversePort}`]);
+          await adbService.runAdbCommand(['-s', serial, 'reverse', `localabstract:${socketName}`, `tcp:${this.reversePort}`]);
           resolve();
         });
       });
@@ -384,7 +384,7 @@ class StreamService {
         }
       });
 
-      // 4. Launch scrcpy-server with send_frame_meta=true & stay_awake=true
+      // 4. Launch scrcpy-server with scid=01a2b3c4
       const bitrate = (settings.bitrate || 16) * 1000000;
       const maxFps = settings.maxFps || 120;
       const maxSize = settings.maxSize || 1920;
@@ -397,10 +397,11 @@ class StreamService {
         '/',
         'com.genymobile.scrcpy.Server',
         '4.1',
+        `scid=${videoScid}`,
         `video_bit_rate=${bitrate}`,
         `max_fps=${maxFps}`,
         `max_size=${maxSize}`,
-        'audio=false', // Video stream socket handles video; dedicated background scrcpy process handles crystal-clear PC audio
+        'audio=false', // Video stream socket handles video; dedicated isolated process handles PC audio
         'control=true',
         'cleanup=true',
         'stay_awake=true',
@@ -421,7 +422,7 @@ class StreamService {
         console.warn(`[scrcpy-server err]: ${d.toString().trim()}`);
       });
 
-      // 5. Start real-time game audio forwarding to PC speakers / headset
+      // 5. Start real-time game audio forwarding to PC speakers / headset (isolated)
       if (this.isAudioEnabled) {
         this.startAudioForwarding(serial);
       }
@@ -464,6 +465,8 @@ class StreamService {
       this.serverProcess = null;
     }
     if (this.activeDevice) {
+      adbService.runAdbCommand(['-s', this.activeDevice.serial, 'reverse', '--remove', 'localabstract:scrcpy_01a2b3c4']).catch(() => {});
+      adbService.runAdbCommand(['-s', this.activeDevice.serial, 'reverse', '--remove', 'localabstract:scrcpy_05d6e7f8']).catch(() => {});
       adbService.runAdbCommand(['-s', this.activeDevice.serial, 'reverse', '--remove', 'localabstract:scrcpy']).catch(() => {});
     }
     this.activeDevice = null;

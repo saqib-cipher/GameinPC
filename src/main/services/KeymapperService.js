@@ -84,9 +84,12 @@ class KeymapperService {
       this.isShootingMode = !this.isShootingMode;
       if (this.isShootingMode) {
         this.initPanAnchor(panControl);
-        this.sendTouchEvent(2, 0, this.panCurrentX, this.panCurrentY);
+        this.panActivePid = 2;
+        this.sendTouchEvent(this.panActivePid, 0, this.panCurrentX, this.panCurrentY);
       } else {
-        this.sendTouchEvent(2, 2, this.panCurrentX, this.panCurrentY);
+        const pid = this.panActivePid || 2;
+        this.sendTouchEvent(pid, 2, this.panCurrentX, this.panCurrentY);
+        this.sendTouchEvent(3, 2, this.panCurrentX, this.panCurrentY); // ensure handover pointer is also released
       }
       return { handled: true, shootingModeChanged: true, isShootingMode: this.isShootingMode };
     }
@@ -94,7 +97,9 @@ class KeymapperService {
     // 2. Suspend Shooting Mode (KeySuspend e.g. "X")
     if (panControl && this.matchKey(panControl.keySuspend, key, code)) {
       this.isSuspended = true;
-      this.sendTouchEvent(2, 2, this.panCurrentX, this.panCurrentY);
+      const pid = this.panActivePid || 2;
+      this.sendTouchEvent(pid, 2, this.panCurrentX, this.panCurrentY);
+      this.sendTouchEvent(3, 2, this.panCurrentX, this.panCurrentY);
       return { handled: true, shootingModeSuspended: true, isSuspended: true };
     }
 
@@ -291,52 +296,49 @@ class KeymapperService {
       ? panControl.mouseSensitivityY 
       : (typeof panControl.sensitivityRatioY === 'number' ? panControl.sensitivityRatioY : rawSensX)) * sensScale;
 
-    // Isotropic base multiplier: ensures 1:1 camera rotation in 3D mobile shooters
-    // Normalized to 1920x1080 reference frame
-    const BASE_PIXEL_SCALE = 1.20;
+    // Calibrated base multiplier for 1:1 camera rotation and effortless upward headshot flicks
+    const BASE_PIXEL_SCALE = 1.35;
 
     let accelFactor = 1.0;
     if (panControl.mouseAcceleration) {
       const mouseSpeed = Math.hypot(movementX, movementY);
-      accelFactor = Math.min(2.5, 1.0 + Math.pow(mouseSpeed, 1.15) * 0.012);
+      accelFactor = Math.min(2.5, 1.0 + Math.pow(mouseSpeed, 1.12) * 0.015);
     }
 
     // Convert mouse counts directly to screen percentage deltas
-    // X: (movementX * sensX * scale / 1920) * 100 = movementX * sensX * 0.0625
-    // Y: (movementY * sensY * scale / 1080) * 100 = movementY * sensY * 0.1111
     const deltaX = (movementX * rawSensX * BASE_PIXEL_SCALE / 19.2) * accelFactor;
     const deltaY = (movementY * rawSensY * BASE_PIXEL_SCALE / 10.8) * accelFactor;
 
     this.panCurrentX += deltaX;
     this.panCurrentY += deltaY;
 
-    // Bounded Look-around Area check (default Right 45% side)
-    const bounds = this.panBounds || { left: 52.0, right: 98.0, top: 10.0, bottom: 90.0 };
+    // Generous bounded Look-around Area (Default Right 45% side: Left 45%, Right 98%, Top 5%, Bottom 95%)
+    const bounds = this.panBounds || { left: 45.0, right: 98.0, top: 5.0, bottom: 95.0 };
     const isOutOfBounds = 
       this.panCurrentX <= bounds.left || 
       this.panCurrentX >= bounds.right || 
       this.panCurrentY <= bounds.top || 
       this.panCurrentY >= bounds.bottom;
 
+    const activePid = this.panActivePid || 2;
+
     if (isOutOfBounds) {
-      // BlueStacks / MSI App Player Tweaks 948816450 / 16450 instantaneous micro-reset:
-      // 1. Lift touch up at current boundary
-      this.sendTouchEvent(2, 2, this.panCurrentX, this.panCurrentY);
-      
-      // 2. Teleport back to center anchor of the right look-around area
-      this.panCurrentX = this.panCenter.x;
-      this.panCurrentY = this.panCenter.y;
-      
-      // 3. Touch down at center anchor
-      this.sendTouchEvent(2, 0, this.panCurrentX, this.panCurrentY);
-      
-      // 4. Apply current frame delta and resume dragging
-      this.panCurrentX += deltaX;
-      this.panCurrentY += deltaY;
-      this.sendTouchEvent(2, 1, this.panCurrentX, this.panCurrentY);
+      // MSI App Player / BlueStacks Continuous Zero-Drop Handover (Tweaks 948816450):
+      // Step 1: Place handover pointer down at pan center anchor
+      const nextPid = activePid === 2 ? 3 : 2;
+      this.sendTouchEvent(nextPid, 0, this.panCenter.x, this.panCenter.y);
+
+      // Step 2: Lift old pointer at boundary
+      this.sendTouchEvent(activePid, 2, this.panCurrentX, this.panCurrentY);
+
+      // Step 3: Switch active pointer and immediately drag with current delta
+      this.panActivePid = nextPid;
+      this.panCurrentX = this.panCenter.x + deltaX;
+      this.panCurrentY = this.panCenter.y + deltaY;
+      this.sendTouchEvent(nextPid, 1, this.panCurrentX, this.panCurrentY);
     } else {
       // Continuous fluid camera sweep
-      this.sendTouchEvent(2, 1, this.panCurrentX, this.panCurrentY);
+      this.sendTouchEvent(activePid, 1, this.panCurrentX, this.panCurrentY);
     }
   }
 

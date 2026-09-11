@@ -177,8 +177,10 @@ export default function TopBar({
         <div className="action-buttons">
           {/* Mirror Start / Stop */}
           <button 
+            tabIndex={-1}
             className={`btn ${isMirrorRunning ? 'btn-danger' : 'btn-primary'}`}
-            onClick={onToggleMirror}
+            onClick={(e) => { e.currentTarget.blur(); onToggleMirror(); }}
+            onFocus={(e) => e.currentTarget.blur()}
             title={isMirrorRunning ? 'Stop Screen Mirror' : 'Start In-Window Mirror'}
           >
             {isMirrorRunning ? <Square size={14} /> : <Play size={14} />}
@@ -187,8 +189,10 @@ export default function TopBar({
 
           {/* Turn Mobile Screen Off/On */}
           <button 
+            tabIndex={-1}
             className={`btn-icon ${isScreenOff ? 'active-glow' : ''}`}
-            onClick={onToggleScreenOff}
+            onClick={(e) => { e.currentTarget.blur(); onToggleScreenOff(); }}
+            onFocus={(e) => e.currentTarget.blur()}
             title={isScreenOff ? "Mobile Screen is OFF (Click to Turn ON)" : "Turn Mobile Screen OFF (Saves Battery & Heat)"}
           >
             <MonitorOff size={16} color={isScreenOff ? "var(--md-sys-color-primary)" : "currentColor"} />
@@ -196,8 +200,10 @@ export default function TopBar({
 
           {/* PC Game Audio Toggle */}
           <button 
+            tabIndex={-1}
             className={`btn-icon ${isAudioEnabled !== false ? 'active-glow' : ''}`}
-            onClick={onToggleAudio}
+            onClick={(e) => { e.currentTarget.blur(); onToggleAudio(); }}
+            onFocus={(e) => e.currentTarget.blur()}
             title={isAudioEnabled !== false ? "Game Sound Active on PC (Click to Mute)" : "Game Sound Muted (Click to Forward to PC)"}
           >
             {isAudioEnabled !== false ? (
@@ -209,8 +215,10 @@ export default function TopBar({
 
           {/* Key Overlay Visibility Toggle */}
           <button 
+            tabIndex={-1}
             className={`btn-icon ${showOverlay ? 'active-glow' : ''}`}
-            onClick={onToggleOverlay}
+            onClick={(e) => { e.currentTarget.blur(); onToggleOverlay(); }}
+            onFocus={(e) => e.currentTarget.blur()}
             title="Toggle Key Overlay"
           >
             {showOverlay ? <Eye size={16} /> : <EyeOff size={16} />}
@@ -218,28 +226,36 @@ export default function TopBar({
 
           {/* Controls Editor Side Panel Toggle */}
           <button 
+            tabIndex={-1}
             className={`btn-icon ${isEditorOpen ? 'active-glow' : ''}`}
-            onClick={onToggleEditor}
+            onClick={(e) => { e.currentTarget.blur(); onToggleEditor(); }}
+            onFocus={(e) => e.currentTarget.blur()}
             title="Open Controls Editor"
           >
             <Sliders size={16} />
           </button>
 
           {/* Settings */}
-          <button className="btn-icon" onClick={onOpenSettingsModal} title="Settings">
+          <button 
+            tabIndex={-1}
+            className="btn-icon" 
+            onClick={(e) => { e.currentTarget.blur(); onOpenSettingsModal(); }} 
+            onFocus={(e) => e.currentTarget.blur()}
+            title="Settings"
+          >
             <Settings size={16} />
           </button>
         </div>
 
         {/* Window Controls */}
         <div className="window-controls">
-          <button className="win-btn" onClick={onMinimize} title="Minimize">
+          <button tabIndex={-1} className="win-btn" onClick={(e) => { e.currentTarget.blur(); onMinimize(); }} onFocus={(e) => e.currentTarget.blur()} title="Minimize">
             <Minimize2 size={13} />
           </button>
-          <button className="win-btn" onClick={onToggleFullscreen} title="Toggle Fullscreen">
+          <button tabIndex={-1} className="win-btn" onClick={(e) => { e.currentTarget.blur(); onToggleFullscreen(); }} onFocus={(e) => e.currentTarget.blur()} title="Toggle Fullscreen">
             <Maximize2 size={13} />
           </button>
-          <button className="win-btn win-btn-close" onClick={onClose} title="Close">
+          <button tabIndex={-1} className="win-btn win-btn-close" onClick={(e) => { e.currentTarget.blur(); onClose(); }} onFocus={(e) => e.currentTarget.blur()} title="Close">
             <X size={14} />
           </button>
         </div>

@@ -29,6 +29,7 @@ import {
   Settings,
   Minus
 } from 'lucide-react';
+import NumericStepperInput from './NumericStepperInput';
 
 const PALETTE_TOOLS = [
   { type: 'Tap', label: 'Tap spot', icon: MousePointer, desc: 'Single tap action' },
@@ -88,6 +89,9 @@ export default function ControlsEditor({
 
   const handleKeyCapture = (e) => {
     if (!isRecordingKey || !selectedControl) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
 
@@ -107,6 +111,9 @@ export default function ControlsEditor({
 
   const handleMouseDownCapture = (e) => {
     if (!isRecordingKey || !selectedControl) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
 
@@ -287,24 +294,24 @@ export default function ControlsEditor({
             <div className="coords-row">
               <div className="coord-field">
                 <label>X (%)</label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  min="0" 
-                  max="100" 
-                  value={(selectedControl.x || 50).toFixed(2)} 
-                  onChange={(e) => onUpdateControl(selectedControl.id, { x: parseFloat(e.target.value) || 0 })} 
+                <NumericStepperInput 
+                  value={selectedControl.x ?? 50} 
+                  step={0.5} 
+                  min={0} 
+                  max={100} 
+                  decimals={2}
+                  onChange={(val) => onUpdateControl(selectedControl.id, { x: val })} 
                 />
               </div>
               <div className="coord-field">
                 <label>Y (%)</label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  min="0" 
-                  max="100" 
-                  value={(selectedControl.y || 50).toFixed(2)} 
-                  onChange={(e) => onUpdateControl(selectedControl.id, { y: parseFloat(e.target.value) || 0 })} 
+                <NumericStepperInput 
+                  value={selectedControl.y ?? 50} 
+                  step={0.5} 
+                  min={0} 
+                  max={100} 
+                  decimals={2}
+                  onChange={(val) => onUpdateControl(selectedControl.id, { y: val })} 
                 />
               </div>
             </div>
@@ -322,72 +329,30 @@ export default function ControlsEditor({
                 <div className="pan-quick-sens-grid">
                   <div className="pan-sens-field">
                     <label>Sensitivity X</label>
-                    <div className="sens-mini-stepper">
-                      <button 
-                        className="stepper-sub-btn" 
-                        onClick={() => {
-                          const cur = selectedControl.mouseSensitivityX || selectedControl.sensitivity || 1.60;
-                          const newVal = Math.max(0.05, parseFloat((cur - 0.05).toFixed(2)));
-                          onUpdateControl(selectedControl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
-                        }}
-                      >
-                        <Minus size={11} />
-                      </button>
-                      <input 
-                        type="number" 
-                        step="0.05"
-                        value={(selectedControl.mouseSensitivityX || selectedControl.sensitivity || 1.60).toFixed(2)}
-                        onChange={(e) => {
-                          const newVal = parseFloat(e.target.value) || 1.60;
-                          onUpdateControl(selectedControl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
-                        }}
-                      />
-                      <button 
-                        className="stepper-sub-btn" 
-                        onClick={() => {
-                          const cur = selectedControl.mouseSensitivityX || selectedControl.sensitivity || 1.60;
-                          const newVal = parseFloat((cur + 0.05).toFixed(2));
-                          onUpdateControl(selectedControl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
-                        }}
-                      >
-                        <Plus size={11} />
-                      </button>
-                    </div>
+                    <NumericStepperInput 
+                      value={selectedControl.mouseSensitivityX || selectedControl.sensitivity || 1.60}
+                      step={0.05}
+                      min={0.05}
+                      max={20.0}
+                      decimals={2}
+                      onChange={(newVal) => {
+                        onUpdateControl(selectedControl.id, { mouseSensitivityX: newVal, sensitivity: newVal });
+                      }}
+                    />
                   </div>
 
                   <div className="pan-sens-field">
                     <label>Sensitivity Y</label>
-                    <div className="sens-mini-stepper">
-                      <button 
-                        className="stepper-sub-btn" 
-                        onClick={() => {
-                          const cur = selectedControl.mouseSensitivityY || selectedControl.sensitivityRatioY || 1.60;
-                          const newVal = Math.max(0.05, parseFloat((cur - 0.05).toFixed(2)));
-                          onUpdateControl(selectedControl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
-                        }}
-                      >
-                        <Minus size={11} />
-                      </button>
-                      <input 
-                        type="number" 
-                        step="0.05"
-                        value={(selectedControl.mouseSensitivityY || selectedControl.sensitivityRatioY || 1.60).toFixed(2)}
-                        onChange={(e) => {
-                          const newVal = parseFloat(e.target.value) || 1.60;
-                          onUpdateControl(selectedControl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
-                        }}
-                      />
-                      <button 
-                        className="stepper-sub-btn" 
-                        onClick={() => {
-                          const cur = selectedControl.mouseSensitivityY || selectedControl.sensitivityRatioY || 1.60;
-                          const newVal = parseFloat((cur + 0.05).toFixed(2));
-                          onUpdateControl(selectedControl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
-                        }}
-                      >
-                        <Plus size={11} />
-                      </button>
-                    </div>
+                    <NumericStepperInput 
+                      value={selectedControl.mouseSensitivityY || selectedControl.sensitivityRatioY || 1.60}
+                      step={0.05}
+                      min={0.05}
+                      max={20.0}
+                      decimals={2}
+                      onChange={(newVal) => {
+                        onUpdateControl(selectedControl.id, { mouseSensitivityY: newVal, sensitivityRatioY: newVal });
+                      }}
+                    />
                   </div>
                 </div>
 

@@ -1150,17 +1150,26 @@
   color: #8892B0;
 }
 
-.sens-mini-stepper {
+/* Reusable Numeric Stepper Component Styles */
+.numeric-stepper-container {
   display: flex;
   align-items: center;
   background: #0C0E16;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xs);
   overflow: hidden;
+  transition: var(--transition-fast);
+  width: 100%;
 }
 
-.sens-mini-stepper input {
+.numeric-stepper-container:focus-within {
+  border-color: var(--md-sys-color-primary, #00E5FF);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.25);
+}
+
+.numeric-stepper-input {
   flex: 1;
+  min-width: 0;
   width: 100%;
   background: transparent;
   border: none;
@@ -1168,13 +1177,18 @@
   text-align: center;
   font-size: 12px;
   font-weight: 700;
-  padding: 4px 0;
+  padding: 6px 4px;
   outline: none;
+  font-family: inherit;
 }
 
-.stepper-sub-btn {
-  width: 22px;
-  height: 26px;
+.numeric-stepper-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.stepper-btn {
+  width: 26px;
+  height: 28px;
   background: rgba(255, 255, 255, 0.05);
   border: none;
   color: #8892B0;
@@ -1183,12 +1197,19 @@
   align-items: center;
   justify-content: center;
   transition: var(--transition-fast);
+  flex-shrink: 0;
+  user-select: none;
 }
 
-.stepper-sub-btn:hover {
-  background: var(--md-sys-color-primary);
+.stepper-btn:hover {
+  background: var(--md-sys-color-primary, #00E5FF);
   color: #000000;
 }
+
+.stepper-btn:active {
+  transform: scale(0.92);
+}
+
 
 /* Editor Footer (Matching Screenshot 2) */
 .editor-footer {
@@ -1382,45 +1403,43 @@
   outline: none;
 }
 
-.pan-stepper-input {
+.pan-stepper-custom {
+  width: 140px !important;
+}
+
+.pan-dual-input {
   display: flex;
-  align-items: center;
-  background: #0C0E16;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xs);
+  gap: 6px;
   width: 140px;
 }
 
-.pan-input-stepper {
+.pan-dual-input .numeric-stepper-container {
   flex: 1;
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: #FFFFFF;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 5px 0;
-  outline: none;
+  min-width: 0;
 }
 
-.stepper-btn {
-  width: 24px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.06);
-  border: none;
-  color: #CCD6F6;
-  cursor: pointer;
+.pan-area-bounds-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.area-bound-box {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition-fast);
+  flex-direction: column;
+  gap: 4px;
 }
 
-.stepper-btn:hover {
-  background: #FF5252;
-  color: #FFFFFF;
+.bound-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #8892B0;
 }
+
 
 .pan-select {
   width: 140px;

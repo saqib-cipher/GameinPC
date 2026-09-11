@@ -47,5 +47,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendKeyUp: (data) => ipcRenderer.invoke('keymap:key-up', data),
   sendMouseDown: (data) => ipcRenderer.invoke('keymap:mouse-down', data),
   sendMouseUp: (data) => ipcRenderer.invoke('keymap:mouse-up', data),
-  sendMouseMove: (data) => ipcRenderer.invoke('keymap:mouse-move', data),
+  sendMouseMove: (data) => ipcRenderer.send('keymap:mouse-move', data),
 });
+

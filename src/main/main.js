@@ -282,6 +282,7 @@ ipcMain.handle('keymap:mouse-up', async (event, { button }) => {
   return keymapperService.handleMouseUp(button);
 });
 
-ipcMain.handle('keymap:mouse-move', async (event, { movementX, movementY }) => {
-  return keymapperService.handleMouseMove(movementX, movementY);
+ipcMain.on('keymap:mouse-move', (event, { movementX, movementY }) => {
+  keymapperService.handleMouseMove(movementX, movementY);
 });
+

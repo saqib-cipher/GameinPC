@@ -15,6 +15,8 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
+import NumericStepperInput from './NumericStepperInput';
+
 
 const AREA_PRESETS = [
   {
@@ -78,6 +80,9 @@ export default function PanSettingsModal({
 
   const handleKeyCapture = (e) => {
     if (!recordingField) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
 
@@ -229,64 +234,64 @@ export default function PanSettingsModal({
             <div className="pan-area-bounds-grid">
               <div className="area-bound-box">
                 <span className="bound-label">Left X (%)</span>
-                <input 
-                  type="number" 
-                  step="0.5" 
-                  min="0" 
-                  max="95" 
-                  className="pan-input"
-                  value={areaLeft.toFixed(1)} 
-                  onChange={(e) => {
-                    const v = Math.max(0, Math.min(areaRight - 5, parseFloat(e.target.value) || 0));
-                    onUpdatePanControl({ areaLeft: v, areaPreset: 'custom' });
+                <NumericStepperInput 
+                  value={areaLeft}
+                  step={0.5}
+                  min={0}
+                  max={95}
+                  decimals={1}
+                  showSteppers={false}
+                  onChange={(v) => {
+                    const clamped = Math.max(0, Math.min(areaRight - 5, v));
+                    onUpdatePanControl({ areaLeft: clamped, areaPreset: 'custom' });
                   }}
                 />
               </div>
 
               <div className="area-bound-box">
                 <span className="bound-label">Right X (%)</span>
-                <input 
-                  type="number" 
-                  step="0.5" 
-                  min="5" 
-                  max="100" 
-                  className="pan-input"
-                  value={areaRight.toFixed(1)} 
-                  onChange={(e) => {
-                    const v = Math.max(areaLeft + 5, Math.min(100, parseFloat(e.target.value) || 100));
-                    onUpdatePanControl({ areaRight: v, areaPreset: 'custom' });
+                <NumericStepperInput 
+                  value={areaRight}
+                  step={0.5}
+                  min={5}
+                  max={100}
+                  decimals={1}
+                  showSteppers={false}
+                  onChange={(v) => {
+                    const clamped = Math.max(areaLeft + 5, Math.min(100, v));
+                    onUpdatePanControl({ areaRight: clamped, areaPreset: 'custom' });
                   }}
                 />
               </div>
 
               <div className="area-bound-box">
                 <span className="bound-label">Top Y (%)</span>
-                <input 
-                  type="number" 
-                  step="0.5" 
-                  min="0" 
-                  max="95" 
-                  className="pan-input"
-                  value={areaTop.toFixed(1)} 
-                  onChange={(e) => {
-                    const v = Math.max(0, Math.min(areaBottom - 5, parseFloat(e.target.value) || 0));
-                    onUpdatePanControl({ areaTop: v, areaPreset: 'custom' });
+                <NumericStepperInput 
+                  value={areaTop}
+                  step={0.5}
+                  min={0}
+                  max={95}
+                  decimals={1}
+                  showSteppers={false}
+                  onChange={(v) => {
+                    const clamped = Math.max(0, Math.min(areaBottom - 5, v));
+                    onUpdatePanControl({ areaTop: clamped, areaPreset: 'custom' });
                   }}
                 />
               </div>
 
               <div className="area-bound-box">
                 <span className="bound-label">Bottom Y (%)</span>
-                <input 
-                  type="number" 
-                  step="0.5" 
-                  min="5" 
-                  max="100" 
-                  className="pan-input"
-                  value={areaBottom.toFixed(1)} 
-                  onChange={(e) => {
-                    const v = Math.max(areaTop + 5, Math.min(100, parseFloat(e.target.value) || 100));
-                    onUpdatePanControl({ areaBottom: v, areaPreset: 'custom' });
+                <NumericStepperInput 
+                  value={areaBottom}
+                  step={0.5}
+                  min={5}
+                  max={100}
+                  decimals={1}
+                  showSteppers={false}
+                  onChange={(v) => {
+                    const clamped = Math.max(areaTop + 5, Math.min(100, v));
+                    onUpdatePanControl({ areaBottom: clamped, areaPreset: 'custom' });
                   }}
                 />
               </div>
@@ -318,37 +323,29 @@ export default function PanSettingsModal({
             {/* Mouse Sensitivity X */}
             <div className="pan-prop-row">
               <label>Mouse sensitivity X</label>
-              <div className="pan-stepper-input">
-                <button className="stepper-btn" onClick={() => updateSensX(sensX - 0.05)}><Minus size={12} /></button>
-                <input 
-                  type="number" 
-                  step="0.05" 
-                  min="0.05" 
-                  max="20.0" 
-                  className="pan-input-stepper"
-                  value={sensX.toFixed(2)} 
-                  onChange={(e) => updateSensX(e.target.value)}
-                />
-                <button className="stepper-btn" onClick={() => updateSensX(sensX + 0.05)}><Plus size={12} /></button>
-              </div>
+              <NumericStepperInput 
+                className="pan-stepper-custom"
+                value={sensX}
+                step={0.05}
+                min={0.05}
+                max={20.0}
+                decimals={2}
+                onChange={updateSensX}
+              />
             </div>
 
             {/* Mouse Sensitivity Y */}
             <div className="pan-prop-row">
               <label>Mouse sensitivity Y</label>
-              <div className="pan-stepper-input">
-                <button className="stepper-btn" onClick={() => updateSensY(sensY - 0.05)}><Minus size={12} /></button>
-                <input 
-                  type="number" 
-                  step="0.05" 
-                  min="0.05" 
-                  max="20.0" 
-                  className="pan-input-stepper"
-                  value={sensY.toFixed(2)} 
-                  onChange={(e) => updateSensY(e.target.value)}
-                />
-                <button className="stepper-btn" onClick={() => updateSensY(sensY + 0.05)}><Plus size={12} /></button>
-              </div>
+              <NumericStepperInput 
+                className="pan-stepper-custom"
+                value={sensY}
+                step={0.05}
+                min={0.05}
+                max={20.0}
+                decimals={2}
+                onChange={updateSensY}
+              />
             </div>
 
             {/* Tweaks Profile */}
@@ -383,21 +380,25 @@ export default function PanSettingsModal({
             <div className="pan-prop-row">
               <label>Anchor Center X / Y (%)</label>
               <div className="pan-dual-input">
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  className="pan-input"
-                  value={(panControl.x || 50).toFixed(1)} 
-                  onChange={(e) => onUpdatePanControl({ x: parseFloat(e.target.value) || 0 })}
-                  title="Anchor X %"
+                <NumericStepperInput 
+                  value={panControl.x ?? 50}
+                  step={0.5}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  showSteppers={false}
+                  placeholder="X %"
+                  onChange={(val) => onUpdatePanControl({ x: val })}
                 />
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  className="pan-input"
-                  value={(panControl.y || 50).toFixed(1)} 
-                  onChange={(e) => onUpdatePanControl({ y: parseFloat(e.target.value) || 0 })}
-                  title="Anchor Y %"
+                <NumericStepperInput 
+                  value={panControl.y ?? 50}
+                  step={0.5}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  showSteppers={false}
+                  placeholder="Y %"
+                  onChange={(val) => onUpdatePanControl({ y: val })}
                 />
               </div>
             </div>
@@ -503,23 +504,29 @@ export default function PanSettingsModal({
 
                 <div className="pan-prop-row">
                   <label>Fire position X (%)</label>
-                  <input 
-                    type="number" 
-                    step="0.1" 
-                    className="pan-input"
-                    value={(panControl.lButtonX !== undefined ? panControl.lButtonX : 84.94).toFixed(2)} 
-                    onChange={(e) => onUpdatePanControl({ lButtonX: parseFloat(e.target.value) || 0 })}
+                  <NumericStepperInput
+                    className="pan-stepper-custom"
+                    value={panControl.lButtonX !== undefined ? panControl.lButtonX : 84.94}
+                    step={0.5}
+                    min={0}
+                    max={100}
+                    decimals={2}
+                    showSteppers={false}
+                    onChange={(val) => onUpdatePanControl({ lButtonX: val })}
                   />
                 </div>
 
                 <div className="pan-prop-row">
                   <label>Fire position Y (%)</label>
-                  <input 
-                    type="number" 
-                    step="0.1" 
-                    className="pan-input"
-                    value={(panControl.lButtonY !== undefined ? panControl.lButtonY : 73.44).toFixed(2)} 
-                    onChange={(e) => onUpdatePanControl({ lButtonY: parseFloat(e.target.value) || 0 })}
+                  <NumericStepperInput
+                    className="pan-stepper-custom"
+                    value={panControl.lButtonY !== undefined ? panControl.lButtonY : 73.44}
+                    step={0.5}
+                    min={0}
+                    max={100}
+                    decimals={2}
+                    showSteppers={false}
+                    onChange={(val) => onUpdatePanControl({ lButtonY: val })}
                   />
                 </div>
 
@@ -554,23 +561,29 @@ export default function PanSettingsModal({
 
                 <div className="pan-prop-row">
                   <label>Free look position X (%)</label>
-                  <input 
-                    type="number" 
-                    step="0.1" 
-                    className="pan-input"
-                    value={panControl.lookAroundX !== undefined ? panControl.lookAroundX : -1} 
-                    onChange={(e) => onUpdatePanControl({ lookAroundX: parseFloat(e.target.value) || -1 })}
+                  <NumericStepperInput
+                    className="pan-stepper-custom"
+                    value={panControl.lookAroundX !== undefined ? panControl.lookAroundX : -1}
+                    step={0.5}
+                    min={-1}
+                    max={100}
+                    decimals={1}
+                    showSteppers={false}
+                    onChange={(val) => onUpdatePanControl({ lookAroundX: val })}
                   />
                 </div>
 
                 <div className="pan-prop-row">
                   <label>Free look position Y (%)</label>
-                  <input 
-                    type="number" 
-                    step="0.1" 
-                    className="pan-input"
-                    value={panControl.lookAroundY !== undefined ? panControl.lookAroundY : -1} 
-                    onChange={(e) => onUpdatePanControl({ lookAroundY: parseFloat(e.target.value) || -1 })}
+                  <NumericStepperInput
+                    className="pan-stepper-custom"
+                    value={panControl.lookAroundY !== undefined ? panControl.lookAroundY : -1}
+                    step={0.5}
+                    min={-1}
+                    max={100}
+                    decimals={1}
+                    showSteppers={false}
+                    onChange={(val) => onUpdatePanControl({ lookAroundY: val })}
                   />
                 </div>
 
