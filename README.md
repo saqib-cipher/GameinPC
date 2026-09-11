@@ -1,18 +1,18 @@
-# GameinPC - Professional Mobile Mirror & Keymapping Controller for PC
+# GL-Player - Professional Mobile Mirror & Keymapping Controller for PC
 
-**GameinPC** is a high-performance Windows PC software that allows you to mirror and control any physical Android mobile device using keyboard and mouse (or gamepad controller) with **zero emulator environment** and **zero emulator detection/ban risk**.
+**GL-Player** is a high-performance Windows PC software that allows you to mirror and control any physical Android mobile device using keyboard and mouse (or gamepad controller) with **zero emulator** overhead.
 
 ---
 
 ## 📥 Installation & Download (.exe)
 
-You can run **GameinPC** directly on Windows without installing Node.js, Python, or Android Studio! All required dependencies (`adb`, `scrcpy`, FFmpeg) are pre-bundled inside the `.exe`.
+You can run **GL-Player** directly on Windows without installing Node.js, Python, or Android Studio! All required dependencies (`adb`, `scrcpy`, FFmpeg) are pre-bundled inside the `.exe`.
 
 ### Download Executable (`.exe`)
-Download the latest release from **[GitHub Releases](https://github.com/saqib-cipher/GameinPC/releases/latest)**:
+Download the latest release from **[GitHub Releases](https://github.com/saqib-cipher/GL-Player/releases/latest)**:
 
-- **`GameinPC-Setup-1.0.0.exe` (Installer)**: Standard Windows setup installer (NSIS) with Desktop & Start Menu shortcuts.
-- **`GameinPC-Portable-1.0.0.exe` (Portable)**: Standalone single `.exe` file requiring **no installation**—just double-click to run!
+- **`GL-Player-Setup-1.0.0.exe` (Installer)**: Standard Windows setup installer (NSIS) with Desktop & Start Menu shortcuts.
+- **`GL-Player-Portable-1.0.0.exe` (Portable)**: Standalone single `.exe` file requiring **no installation**—just double-click to run!
 
 ---
 
@@ -28,7 +28,7 @@ Download the latest release from **[GitHub Releases](https://github.com/saqib-ci
    - Screen-off mode: powers off the phone screen while playing on PC to preserve battery life and eliminate overheating.
 
 3. **Complete Emulator-Grade Mouse & Keyboard Controls**:
-   - **FPS Aim & Shooting Mode (Pan)**: Smooth 360° mouse camera look around (Pointer Lock) with customizable X & Y sensitivity, mouse acceleration toggle, suspend key (`X`), and left-click fire button without camera interruptions.
+   - **FPS Aim & Shooting Mode (Pan)**: Smooth 360° mouse camera look around (Pointer Lock) with customizable X & Y sensitivity, mouse acceleration toggle, suspend key (`X`), and left-click fire button.
    - **Dynamic Analog WASD (D-Pad)**: 8-way and radial analog joystick simulation with adjustable radius, speed, and activation curve.
    - **Rapid Fire (TapRepeat)**: Configurable auto-tap clicker (up to 30 taps/sec).
    - **Macro Script Runner**: Interprets sequences like `tap 2.69 62.94`, `wait 0.5`, `swipe 10 20 80 90 200`.
@@ -56,13 +56,13 @@ Download the latest release from **[GitHub Releases](https://github.com/saqib-ci
 1. On your phone, go to **Settings &rarr; About phone** and tap **Build number** 7 times to enable Developer Options.
 2. Go to **Settings &rarr; Developer options** and turn ON **USB debugging**.
 3. Plug in your phone via USB cable. Accept the "Allow USB debugging" prompt on your phone screen.
-4. GameinPC will automatically detect your phone in the top bar! Click **Start Mirror & Play Game**.
+4. GL-Player will automatically detect your phone in the top bar! Click **Start Mirror & Play Game**.
 
 ### Option B: Wireless Debugging (Cable-Free)
 1. Connect your phone and PC to the same Wi-Fi network.
-2. In GameinPC, click the **Wireless Debugging** button in the top bar.
+2. In GL-Player, click the **Wireless Debugging** button in the top bar.
 3. On Android 11+: Open **Settings &rarr; Developer options &rarr; Wireless debugging &rarr; Pair device with pairing code**.
-4. Enter the IP, Port, and 6-digit Pairing Code in GameinPC and click **Pair & Connect**.
+4. Enter the IP, Port, and 6-digit Pairing Code in GL-Player and click **Pair & Connect**.
 
 ---
 
